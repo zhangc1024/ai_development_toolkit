@@ -127,3 +127,7 @@ Vite 的 worker.format 设为 es，支持模块 Worker 动态导入。所有页�
 ## UUID、随机、文本及 HTTP 模块
 
 新增 productivity 模块；文本操作通过 text.worker.ts 执行，Diff 库只进入 Worker 构建。随机生成使用 Web Crypto 和拒绝采样。HTTP 数据本地维护，不请求 API。模块、容量限制和桌面复用约定见 [PRODUCTIVITY_TOOLS.md](PRODUCTIVITY_TOOLS.md)。
+
+## 提示词优化模块
+
+提示词优化是可选网络能力：静态模式仍不联网，Ollama 模式只访问用户配置的服务；配置可持久化，正文与结果不持久化。模块、取消/降级边界、部署与验证见 [PROMPT_OPTIMIZER.md](PROMPT_OPTIMIZER.md)。

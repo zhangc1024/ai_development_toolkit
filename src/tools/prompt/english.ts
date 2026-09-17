@@ -1,0 +1,22 @@
+import type { CategoryTemplate } from './categories'
+
+export const englishSections: Record<string, string> = {
+  专家角色: 'Role:\nAct as a professional with expertise relevant to the original request.',
+  任务目标: 'Task:\nComplete the task described in the original request while preserving its intent and scope.',
+  背景上下文: 'Context:\n[Please provide the relevant scenario, available materials, and environment.]\nIdentify missing information explicitly; do not treat it as known fact.',
+  分析步骤: 'Steps:\n1. Clarify the task and available information; identify what is missing.\n2. Provide actionable steps and key supporting reasons.\n3. Explain how to verify that the result meets the original request.',
+  输出格式: 'Output format:\nFollow any format specified in the original request. Otherwise, organize the response into results, key supporting reasons, and next steps.',
+  限制条件: 'Constraints:\nPreserve the original intent. Do not invent facts or data.\nState uncertainty explicitly and avoid unrelated expansion.',
+  示例要求: 'Examples:\nInclude concise examples when helpful. Label examples and assumptions clearly; do not present them as facts supplied by the user.',
+}
+export const englishTemplates: Record<string, CategoryTemplate> = {
+  '编程开发': { role: 'senior software engineer', context: 'technology stack, runtime, inputs and outputs, existing code, and compatibility requirements', steps: 'Clarify interfaces and business boundaries; provide a minimal working implementation; explain error handling and verification', output: 'approach, code, usage, tests, and limitations' },
+  'SQL / 数据库': { role: 'database design and performance engineer', context: 'database version, SQL, table schemas, indexes, data volume, and execution plans', steps: 'Use the provided SQL and execution plans to inspect scans, joins, and indexes; suggest query and index improvements; explain verification and write costs', output: 'evidence, SQL and index recommendations, verification steps, and caveats' },
+  '代码解释': { role: 'software engineer skilled at explaining code', context: 'the code, relevant dependencies, and areas to explain', steps: 'Summarize the purpose; explain inputs, outputs, and execution flow; identify boundaries and uncertain external dependencies', output: 'overview, section-by-section explanation, data flow, and caveats' },
+  'Bug 排查': { role: 'software troubleshooting engineer', context: 'error logs, relevant code, environment, reproduction steps, and expected behavior', steps: 'Separate facts from hypotheses; rank possible causes with checks to verify them; propose a minimal fix and regression checks', output: 'symptoms, possible causes, investigation steps, fixes, and regression checks' },
+  '产品需求': { role: 'product requirements analyst', context: 'target users, business problems, existing workflows, and release scope', steps: 'Clarify user goals; describe primary and exceptional flows; define scope and verifiable acceptance criteria', output: 'goals, scope, user flows, functional requirements, edge cases, and acceptance criteria' },
+  '文本写作': { role: 'editor', context: 'audience, purpose, tone, length, and information to preserve', steps: 'Clarify the topic and audience; organize the structure; check facts, tone, and consistency', output: 'the requested text in the specified genre, with a brief note about missing information if necessary' },
+  '翻译': { role: 'professional translator', context: 'target language, usage context, terminology, and formatting requirements', steps: 'Preserve meaning, tone, numbers, and proper nouns; address ambiguity; keep terminology consistent without expanding the source', output: 'the translation, with brief notes only for ambiguities that affect accuracy' },
+  '数据分析': { role: 'data analyst', context: 'data samples, field definitions, measurement conventions, and analysis goals', steps: 'Check data quality; choose appropriate methods; distinguish correlation from causation; state the limits of the conclusions', output: 'data and assumptions, methods, results, limitations, and recommendations' },
+  '图片生成提示词': { role: 'image prompt designer', context: 'subject, style, composition, lighting, aspect ratio, and elements to avoid', steps: 'Clarify the subject and scene; organize composition, lighting, and style descriptions; preserve requirements without adding unrelated subjects', output: 'a ready-to-use image prompt, with a negative prompt only if requested' },
+}

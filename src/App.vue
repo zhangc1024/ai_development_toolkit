@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { Braces, Search, ChevronRight, CodeXml, LockKeyhole, PanelLeftClose, PanelLeftOpen, ArrowUpRight, Link, Binary, Languages, Code, KeyRound, Fingerprint, Clock, Database, FileKey, Regex, QrCode, ShieldCheck, Dices, GitCompareArrows, ListFilter, Globe, Hash } from '@lucide/vue'
+import { Sparkles, Braces, Search, ChevronRight, CodeXml, LockKeyhole, PanelLeftClose, PanelLeftOpen, ArrowUpRight, Link, Binary, Languages, Code, KeyRound, Fingerprint, Clock, Database, FileKey, Regex, QrCode, ShieldCheck, Dices, GitCompareArrows, ListFilter, Globe, Hash } from '@lucide/vue'
 import { tools } from './tools/registry'
-const menuIcons = { uuid: Hash, random: Dices, diff: GitCompareArrows, text: ListFilter, 'http-status': Globe, regex: Regex, qrcode: QrCode, totp: ShieldCheck, url: Link, base64: Binary, unicode: Languages, 'html-entity': Code, jwt: FileKey, hash: Fingerprint, hmac: KeyRound, timestamp: Clock, sql: Database } as Record<string, typeof Braces>
+const menuIcons = { prompt: Sparkles, rsa: KeyRound, 'json-diff': GitCompareArrows, 'image-base64': Binary, 'qr-reader': QrCode, uuid: Hash, random: Dices, diff: GitCompareArrows, text: ListFilter, 'http-status': Globe, regex: Regex, qrcode: QrCode, totp: ShieldCheck, url: Link, base64: Binary, unicode: Languages, 'html-entity': Code, jwt: FileKey, hash: Fingerprint, hmac: KeyRound, timestamp: Clock, sql: Database } as Record<string, typeof Braces>
 const query = ref('')
 const collapsed = ref(false)
 const route = ref(location.hash.slice(2) || 'json')
@@ -28,13 +28,13 @@ const groups = computed(() => [...new Set(tools.map(t => t.category))].map(categ
         </div>
         <p v-if="!groups.length" class="menu-empty">没有找到匹配的工具</p>
       </nav>
-      <div class="sidebar-note"><span class="local-dot"></span> 本地运行，安心使用<p>输入内容仅在你的浏览器中处理。</p></div>
+      <div class="sidebar-note"><span class="local-dot"></span> 本地运行，安心使用<p>静态工具在浏览器处理；AI 可连接自配服务。</p></div>
       <div class="sidebar-footer"><span>DevKit <small>v0.1.0</small></span><span>为日常开发而造 <ArrowUpRight :size="12" /></span></div>
     </aside>
     <div class="main-shell">
-      <header class="topbar"><div class="breadcrumb"><button class="icon-button" @click="collapsed = !collapsed" :aria-label="collapsed ? '展开菜单' : '收起菜单'"><PanelLeftOpen v-if="collapsed" :size="18" /><PanelLeftClose v-else :size="18" /></button><span>工具箱</span><ChevronRight :size="14" /><strong>{{ active?.name ?? '未找到工具' }}</strong></div><span class="privacy-pill"><LockKeyhole :size="13" /> 无需上传 · 本地处理</span></header>
+      <header class="topbar"><div class="breadcrumb"><button class="icon-button" @click="collapsed = !collapsed" :aria-label="collapsed ? '展开菜单' : '收起菜单'"><PanelLeftOpen v-if="collapsed" :size="18" /><PanelLeftClose v-else :size="18" /></button><span>工具箱</span><ChevronRight :size="14" /><strong>{{ active?.name ?? '未找到工具' }}</strong></div><span class="privacy-pill"><LockKeyhole :size="13" /> 静态工具本地处理</span></header>
       <main><component v-if="active?.component" :is="active.component" :key="active.id" v-bind="active.props" /><section v-else class="not-found"><h1>这个工具还不存在</h1><p>请从菜单选择已上线的工具。</p><a href="#/json">返回 JSON 工具</a></section></main>
-      <footer class="page-footer"><span>让重复的工作更简单。</span><span>纯前端 · 无账号 · 无数据上传</span></footer>
+      <footer class="page-footer"><span>让重复的工作更简单。</span><span>纯前端 · 无账号 · AI 服务自行配置</span></footer>
     </div>
   </div>
 </template>

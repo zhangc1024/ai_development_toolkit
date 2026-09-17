@@ -20,7 +20,11 @@ npm run build    # TypeScript / Vue 类型检查 + 生产构建
 npm run preview  # 本地预览 dist，默认 4173
 ```
 
-依赖随构建打包，不引用在线字体、外部脚本或转换接口。开发安装依赖需要网络；使用工具时输入只在浏览器内存和本地 Worker 之间传递。
+依赖随构建打包，不引用在线字体、外部脚本或转换接口。开发安装依赖需要网络；静态工具的输入只在浏览器内存和本地 Worker 之间传递；提示词优化启用 Ollama 后会发送到用户配置的本机或内网服务。
+
+## 图片工具
+
+新增图片 ↔ Base64 与本地二维码识别，支持选择、拖放和粘贴图片。详见 [IMAGE_TOOLS.md](docs/IMAGE_TOOLS.md)。
 
 ## JSON、PHP 与 Python 互转
 
@@ -79,3 +83,21 @@ npm run preview  # 本地预览 dist，默认 4173
 不含账号、数据库、埋点、云同步、JSON Schema、JSON 修复、JSONPath、键排序、桌面安装包或 PWA 离线缓存。纯静态不代表冷启动可离线；后续桌面端将资源随应用打包。
 
 原目录中的 Hyperf 模板 README 已完整保存在 [历史模板](docs/archive/HYPERF_README.md)，仅为保留原有文件内容，不是本项目运行要求。
+
+2FA 支持选择、拖放或粘贴二维码图片，导入 TOTP 配置或纯 Base32 密钥。详见 [EXTRA_TOOLS.md](docs/EXTRA_TOOLS.md)。
+
+新增 [JSON 结构化对比](docs/JSON_DIFF.md)：对象字段无序匹配，编辑器原文标红，差异列表与双侧定位。
+
+## RSA 加密 / 解密
+
+新增本地 RSA 公私钥生成、公钥加密、私钥解密，支持 OAEP SHA-256 / SHA-1 与 PKCS#1 v1.5、Base64 / Hex 密文。入口为安全与签名 → RSA 加密 / 解密（`#/rsa`）。详见 [RSA_TOOL.md](docs/RSA_TOOL.md)。
+
+## 图片压缩与格式转换
+
+新增四档压缩和原格式 / WebP / PNG / JPG 转换，支持本地图片选择、拖放、粘贴、体积统计、滑块对比与下载。入口为图片工具 → 图片压缩 / 格式转换（`#/image-compress`）。规则、保真边界与依赖许可见 [IMAGE_COMPRESSION.md](docs/IMAGE_COMPRESSION.md)。
+
+图片压缩现支持 ZIP 批量处理：解包后处理图片，保留目录和其他文件，提供结果 ZIP 下载。限制和规则见 [ZIP_IMAGE_PROCESSING.md](docs/ZIP_IMAGE_PROCESSING.md)。
+
+## 提示词优化
+
+入口为 AI 工具 → 提示词优化（`#/prompt`）。支持十类静态模板、自动分类、可选本机/内网 Ollama、模型列表、取消与自动降级。仅保存配置，不保存提示词或结果。详见 [使用说明](docs/PROMPT_OPTIMIZER.md) 和 [实现与验证记录](docs/PROMPT_OPTIMIZER_PROGRESS.md)。

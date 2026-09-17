@@ -41,3 +41,11 @@ export function regexMatches(pattern:string, flags:string, input:string) {
  }
  return {rows,truncated:false}
 }
+
+export function parseQrOtp(text:string){
+ const value=text.trim()
+ if(/^otpauth:/i.test(value))return {...parseOtp(value),raw:false}
+ if(!/^[A-Za-z2-7=\s]+$/.test(value))throw Error('不是 TOTP 配置或 Base32 密钥')
+ base32(value)
+ return {secret:value.replace(/\s/g,'').toUpperCase(),algorithm:'SHA1',digits:6,period:30,raw:true}
+}

@@ -1,0 +1,21 @@
+Image compression dependencies
+
+jSquash wrappers:
+@jsquash/jpeg 1.6.0, @jsquash/webp 1.5.0, @jsquash/oxipng 2.3.0
+https://github.com/jamsinclair/jSquash
+Apache-2.0. See jsquash-Apache-2.0.txt.
+Underlying MozJPEG, libwebp and OxiPNG retain their respective upstream licenses.
+Sources and codec notices: https://github.com/jamsinclair/jSquash/tree/main/packages
+
+imagequant 0.1.2 (unmodified npm WASM and bindings):
+https://github.com/valterkraemer/imagequant-wasm
+npm package declares GPL v3. See imagequant-GPL-3.txt.
+Source and build instructions: https://github.com/valterkraemer/imagequant-wasm
+Underlying library: https://github.com/ImageOptim/libimagequant
+
+These notices describe third-party components; they do not relicense the application.
+
+ZIP archive support:
+@zip.js/zip.js 2.15.0
+https://github.com/gildas-lormeau/zip.js
+BSD-3-Clause. See zipjs-BSD-3-Clause.txt.
