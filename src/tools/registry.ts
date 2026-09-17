@@ -7,7 +7,9 @@ const encodingPage = defineAsyncComponent(() => import('./encoding/EncodingTool.
 export interface ToolDefinition { id: string; name: string; description?: string; category: string; icon?: string; status: 'ready' | 'planned'; component?: Component; props?: Record<string, string> }
 export const tools: ToolDefinition[] = [
   { id: 'prompt', name: '提示词优化', category: 'AI 工具', status: 'ready', component: defineAsyncComponent(() => import('./prompt/PromptTool.vue')) },
+  { id: 'watermark', name: '图片加水印', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./watermark/WatermarkTool.vue')) },
   { id: 'image-compress', name: '图片压缩 / 格式转换', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./images/ImageCompressTool.vue')) },
+  { id: 'moments-grid', name: '一图切九格', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./moments-grid/MomentsGridTool.vue')) },
   { id: 'json-diff', name: 'JSON 结构化对比', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./json-diff/JsonDiffTool.vue')) },
   { id: 'json', name: 'JSON 格式化', description: '格式化 / 压缩 / 校验', category: '数据处理', icon: 'braces', status: 'ready', component: defineAsyncComponent(() => import('./json/JsonTool.vue')) },
   { id: 'php-array', name: 'JSON ↔ PHP / Python', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./literals/LiteralTool.vue')) },

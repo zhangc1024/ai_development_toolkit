@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { Sparkles, Braces, Search, ChevronRight, CodeXml, LockKeyhole, PanelLeftClose, PanelLeftOpen, ArrowUpRight, Link, Binary, Languages, Code, KeyRound, Fingerprint, Clock, Database, FileKey, Regex, QrCode, ShieldCheck, Dices, GitCompareArrows, ListFilter, Globe, Hash } from '@lucide/vue'
+import { Stamp, Sparkles, Braces, Grid3x3, Search, ChevronRight, CodeXml, LockKeyhole, PanelLeftClose, PanelLeftOpen, ArrowUpRight, Link, Binary, Languages, Code, KeyRound, Fingerprint, Clock, Database, FileKey, Regex, QrCode, ShieldCheck, Dices, GitCompareArrows, ListFilter, Globe, Hash } from '@lucide/vue'
 import { tools } from './tools/registry'
-const menuIcons = { prompt: Sparkles, rsa: KeyRound, 'json-diff': GitCompareArrows, 'image-base64': Binary, 'qr-reader': QrCode, uuid: Hash, random: Dices, diff: GitCompareArrows, text: ListFilter, 'http-status': Globe, regex: Regex, qrcode: QrCode, totp: ShieldCheck, url: Link, base64: Binary, unicode: Languages, 'html-entity': Code, jwt: FileKey, hash: Fingerprint, hmac: KeyRound, timestamp: Clock, sql: Database } as Record<string, typeof Braces>
+const menuIcons = { watermark: Stamp, 'moments-grid': Grid3x3, prompt: Sparkles, rsa: KeyRound, 'json-diff': GitCompareArrows, 'image-base64': Binary, 'qr-reader': QrCode, uuid: Hash, random: Dices, diff: GitCompareArrows, text: ListFilter, 'http-status': Globe, regex: Regex, qrcode: QrCode, totp: ShieldCheck, url: Link, base64: Binary, unicode: Languages, 'html-entity': Code, jwt: FileKey, hash: Fingerprint, hmac: KeyRound, timestamp: Clock, sql: Database } as Record<string, typeof Braces>
 const query = ref('')
 const collapsed = ref(false)
 const route = ref(location.hash.slice(2) || 'json')
