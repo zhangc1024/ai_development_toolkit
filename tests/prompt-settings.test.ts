@@ -15,18 +15,21 @@ describe('提示词配置持久化', () => {
     expect(settings.enabled).toBe(false)
   })
 
-  it.each(['http://192.168.1.100:11434', 'https://ollama.company.internal'])('保存后可恢复内网地址 %s 与空维度', baseUrl => {
+  it.each(['http://192.168.1.100:11434', 'https://ollama.company.internal'])('工具配置不重复保存共用地址 %s 与模型', baseUrl => {
     const storage = memoryStorage()
     const settings = { ...defaultSettings(), mode: 'ollama', category: 'SQL / 数据库', selected: [], enabled: true, baseUrl, model: 'qwen3:8b' }
     expect(saveSettings(settings, () => storage)).toBe(true)
-    expect(loadSettings(() => storage)).toEqual({ settings, warning: '' })
+    expect(loadSettings(() => storage)).toEqual({ settings: { ...settings, baseUrl: defaultSettings().baseUrl, model: '' }, warning: '' })
+    expect(JSON.parse(storage.getItem(SETTINGS_KEY)!)).not.toHaveProperty('baseUrl')
+    expect(JSON.parse(storage.getItem(SETTINGS_KEY)!)).not.toHaveProperty('model')
   })
 
   it('只写入允许的配置字段，不写提示词、结果或其他未知字段', () => {
     const storage = memoryStorage()
     const settings = { ...defaultSettings(), input: '私密输入', output: '私密结果', request: '不保存请求状态' }
     saveSettings(settings, () => storage)
-    expect(JSON.parse(storage.getItem(SETTINGS_KEY)!)).toEqual(defaultSettings())
+    const { baseUrl, model, ...options } = defaultSettings()
+    expect(JSON.parse(storage.getItem(SETTINGS_KEY)!)).toEqual(options)
   })
 
   it('恢复时校验枚举和类型，维度去重并过滤未知项', () => {

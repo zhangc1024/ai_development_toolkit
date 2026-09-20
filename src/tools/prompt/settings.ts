@@ -55,7 +55,8 @@ export function loadSettings(storage: StorageProvider = browserStorage): { setti
 
 export function saveSettings(settings: PromptSettings, storage: StorageProvider = browserStorage): boolean {
   try {
-    storage().setItem(SETTINGS_KEY, JSON.stringify(normalizeSettings(settings)))
+    const { baseUrl: _baseUrl, model: _model, ...options } = normalizeSettings(settings)
+    storage().setItem(SETTINGS_KEY, JSON.stringify(options))
     return true
   } catch { return false }
 }

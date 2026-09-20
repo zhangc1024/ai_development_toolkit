@@ -4,7 +4,7 @@ import { Sparkles, Copy, Trash2, RotateCcw, SlidersHorizontal, Server, ShieldChe
 import { categories, dimensions, loadSettings, saveSettings, type PromptSettings } from './settings'
 import { optimizePrompt, MAX_PROMPT_CHARS } from './optimizer'
 import { resolveCategory } from './categories'
-import { listModels } from './providers/ollama'
+import { aiSettings, openAiSettings } from '../../ai/settings'
 import { copyText } from '../../platform/browser'
 
 const locationOrigin = location.origin
@@ -17,13 +17,9 @@ const mode = ref(restored.settings.mode)
 const language = ref(restored.settings.language)
 const enabled = ref(restored.settings.enabled)
 const thinking = ref(restored.settings.thinking)
-const baseUrl = ref(restored.settings.baseUrl)
-const model = ref(restored.settings.model)
+const baseUrl = computed(() => aiSettings.baseUrl)
+const model = computed(() => aiSettings.model)
 const selected = ref(restored.settings.selected)
-const models = ref<string[]>([])
-const connection = ref('未检测连接')
-const checking = ref(false)
-const connectionFailed = ref(false)
 const busy = ref(false)
 const output = ref('')
 const generated = ref(false)
@@ -43,7 +39,6 @@ const modeHint = computed(() => mode.value === 'auto'
     : '仅使用配置的 Ollama，失败时显示错误，不自动切换模式。')
 let revision = 0
 let generation: AbortController | undefined
-let detection: AbortController | undefined
 function currentSettings(): PromptSettings {
   return { version: 1, language: language.value, category: category.value, mode: mode.value, enabled: enabled.value, thinking: thinking.value, baseUrl: baseUrl.value, model: model.value, selected: [...selected.value] }
 }
@@ -69,57 +64,12 @@ watch([input, language, category, selected, mode, enabled, thinking, baseUrl, mo
   fallback.value = false
   revision++
 }, { deep: true, flush: 'sync' })
-watch([baseUrl, enabled], () => {
-  detection?.abort()
-  detection = undefined
-  checking.value = false
-  models.value = []
-  connection.value = '设置已变更，请重新检测连接'
-  connectionFailed.value = false
-}, { flush: 'sync' })
-watch(mode, value => { if (value === 'static' && checking.value) cancelDetection() }, { flush: 'sync' })
 watch(output, () => { notice.value = ''; revision++ }, { flush: 'sync' })
-onBeforeUnmount(() => { cancelGeneration(false); detection?.abort(); revision++ })
+onBeforeUnmount(() => { cancelGeneration(false); revision++ })
 
 function resetOptions() { category.value = '自动识别'; selected.value = dimensions.slice(0, 6); mode.value = 'auto'; language.value = 'zh' }
-async function detect() {
-  if (!enabled.value || busy.value || checking.value) return
-  const controller = new AbortController()
-  detection = controller
-  checking.value = true
-  connectionFailed.value = false
-  connection.value = '正在连接并检查模型…'
-  try {
-    const result = await listModels(baseUrl.value, controller.signal)
-    if (detection !== controller) return
-    models.value = result.models
-    if (!model.value && result.models.length) model.value = result.models[0]!
-    if (!result.models.length) {
-      connectionFailed.value = true
-      connection.value = result.skipped
-        ? '没有可确认的本地文本模型；远程、非生成或无法读取详情的模型已排除。请检查服务日志与 Ollama 版本。'
-        : '服务已连接，但没有安装模型。请先在 Ollama 服务器安装文本生成模型。'
-    } else {
-      connection.value = '已连接 · ' + result.models.length + ' 个可用模型' + (result.skipped ? '，已排除 ' + result.skipped + ' 个不适用或无法确认的模型' : '')
-      if (!result.models.includes(model.value)) connection.value += '；原模型不可用，请重新选择。'
-    }
-  } catch (error) {
-    if (detection !== controller || controller.signal.aborted) return
-    models.value = []
-    connectionFailed.value = true
-    connection.value = error instanceof Error ? error.message : '连接失败'
-  } finally {
-    if (detection === controller) { checking.value = false; detection = undefined }
-  }
-}
-function cancelDetection() {
-  detection?.abort()
-  detection = undefined
-  checking.value = false
-  connection.value = '已取消连接检测'
-}
 async function optimize() {
-  if (busy.value || checking.value) return
+  if (busy.value) return
   const startedAt = performance.now()
   const controller = new AbortController()
   generation = controller
@@ -209,30 +159,16 @@ async function copyResult() {
               <button v-for="item in modes" :key="item.id" :aria-pressed="mode === item.id" :class="{ active: mode === item.id }" @click="mode = item.id">{{ item.label }}</button>
             </div>
             <p class="prompt-help mode-help">{{ modeHint }}</p>
-            <details v-if="mode !== 'static'" class="ollama-settings" :open="mode === 'ollama' || enabled">
-              <summary><Server :size="14" />本地 / 内网 Ollama <span>配置服务</span></summary>
-              <div class="ollama-fields">
-                <label class="encoding-checkbox"><input v-model="enabled" type="checkbox" />启用 Ollama</label>
-                <label class="prompt-field" for="ollama-address">服务地址
-                  <input id="ollama-address" v-model="baseUrl" type="url" spellcheck="false" placeholder="http://192.168.1.100:11434" :disabled="!enabled" />
-                </label>
-                <p class="prompt-help">支持本机、局域网 IP 或内网域名。</p>
-                <div class="model-row">
-                  <label class="prompt-field" for="ollama-model">模型<select id="ollama-model" v-model="model" :disabled="!enabled || checking || !models.length">
-                    <option value="">请选择模型</option>
-                    <option v-if="model && !models.includes(model)" :value="model" disabled>{{ model }}（待检测 / 不可用）</option>
-                    <option v-for="name in models" :key="name" :value="name">{{ name }}</option>
-                  </select></label>
-                  <button class="button" :disabled="!enabled || checking || busy" @click="detect">{{ checking ? '检测中…' : '检测连接' }}</button>
-                  <button v-if="checking" class="button" @click="cancelDetection">取消检测</button>
-                </div>
-                <label class="encoding-checkbox"><input v-model="thinking" type="checkbox" role="switch" :disabled="!enabled" />Thinking（深度思考）</label>
-                <p class="prompt-help">默认关闭，优先减少思考耗时；开启可能更慢。效果取决于模型，GPT-OSS 等模型不能通过此开关完全关闭思考。</p>
-                <span class="connection-placeholder" :class="{ 'limit-error': connectionFailed }" role="status">{{ connection }}</span>
-              </div>
-            </details>
+            <div v-if="mode !== 'static'" class="ollama-settings ollama-fields">
+              <p><Server :size="14" /> 共用 AI 设置 · {{ model || '尚未选择模型' }}</p>
+              <label class="encoding-checkbox"><input v-model="enabled" type="checkbox" />此工具启用 Ollama</label>
+              <p class="prompt-help">服务地址和默认模型由全站 AI 设置统一维护。</p>
+              <button class="button" @click="openAiSettings">打开 AI 设置</button>
+              <label class="encoding-checkbox" style="margin-top:14px"><input v-model="thinking" type="checkbox" role="switch" :disabled="!enabled" />Thinking（深度思考）</label>
+              <p class="prompt-help">默认关闭，开启可能更慢。效果取决于模型，GPT-OSS 等模型不能通过此开关完全关闭思考。</p>
+            </div>
             <div class="prompt-submit">
-              <button class="button primary" :disabled="busy || checking" @click="optimize"><Sparkles :size="15" />{{ busy ? '正在优化…' : '优化提示词' }}</button>
+              <button class="button primary" :disabled="busy" @click="optimize"><Sparkles :size="15" />{{ busy ? '正在优化…' : '优化提示词' }}</button>
               <button v-if="busy" class="button" @click="cancelGeneration()">取消</button>
               <button class="button text-button" @click="resetOptions"><RotateCcw :size="13" />恢复默认选项</button>
             </div>
@@ -266,7 +202,7 @@ async function copyResult() {
     <details class="usage-details">
       <summary><Info :size="14" />使用说明与连接排查</summary>
       <div>
-        <p>静态模式直接可用。模型模式请启用 Ollama、填写服务地址、检测连接并选择模型。模型首次加载可能较慢，生成最长等待 120 秒；可主动取消。全部取消优化维度时原样返回输入，不请求模型。</p>
+        <p>静态模式直接可用。模型模式请先在全站 AI 设置中配置服务并选择模型，再为此工具启用 Ollama。模型首次加载可能较慢，生成最长等待 120 秒；可主动取消。全部取消优化维度时原样返回输入，不请求模型。</p>
         <p>支持 localhost、局域网 IP 和内网域名，例如 http://192.168.1.100:11434。内网服务器需开放监听与端口，并通过 OLLAMA_ORIGINS 放行当前网页来源：<code>{{ locationOrigin }}</code>。不要无差别放行所有来源。</p>
         <p>浏览器可能要求本地网络权限，HTTPS 页面访问 HTTP 内网地址也可能受限。请允许可信页面访问，或由管理员为服务配置 HTTPS；不要关闭浏览器安全检查。网络错误无法仅凭前端准确区分 CORS、服务停机或浏览器拦截。</p>
         <p>只显示经模型详情确认的本地文本生成模型。旧版 Ollama 无能力信息时请升级。要确保离线推理，请管理员关闭 Ollama 云端功能（OLLAMA_NO_CLOUD=1）；网页无法保证服务器的内部代理或日志策略。</p>

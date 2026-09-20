@@ -40,3 +40,17 @@
 @media(max-width:620px){.hmac-key-row{gap:10px}.secret-field{flex-basis:calc(100% - 35px)}.time-form,.time-results{padding:16px}.time-results dl>div{grid-template-columns:90px minmax(0,1fr) 20px;gap:6px}.live-clock{padding:18px}.live-clock strong{font-size:22px}.trust-banner{align-items:flex-start}}
 
 .sidebar{min-width:0}.time-form,.time-results,.live-clock{min-width:0}
+
+/* 首页与具体工具共用分类导航外壳。 */
+.home-link{margin-bottom:16px}
+.category-shell .sidebar nav{margin-top:30px}
+.category-link{width:100%;border:0;background:transparent;text-align:left;margin-bottom:12px;color:#536079}
+.category-link:hover{background:#f5f2fc;color:#715bd8}
+.category-shell .sidebar-note{background:none;border:0;padding:12px 8px}
+@media(max-width:820px){.category-shell .sidebar nav{margin-top:16px;gap:8px}.home-link{flex-shrink:0;margin-bottom:0}.category-link{flex-shrink:0;width:auto;margin-bottom:0;white-space:nowrap}.category-shell .sidebar nav{align-items:center}}
+
+.category-shell .menu-item{font-size:14px}
+
+@media(min-width:1001px) and (max-width:1100px){.category-shell{grid-template-columns:190px minmax(0,1fr)}.category-shell.sidebar-collapsed{grid-template-columns:minmax(0,1fr)}.category-shell .sidebar{padding:20px 12px}.category-shell .topbar{height:42px}.category-shell .brand{padding:0;font-size:21px}}
+
+.category-link.active{background:#f0ecfc;color:#715bd8}
