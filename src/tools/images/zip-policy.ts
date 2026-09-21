@@ -1,3 +1,4 @@
+import { detectPhoto } from './photo-formats'
 import type { ImageFormat } from './compression'
 export const ZIP_LIMITS = { archiveBytes: 50 * 1024 * 1024, entries: 500, expandedBytes: 200 * 1024 * 1024, outputBytes: 210 * 1024 * 1024 }
 export type ZipLimits = typeof ZIP_LIMITS
@@ -40,13 +41,14 @@ export function createZipNamer(paths: string[]) {
   }
 }
 export function supportedImageCandidate(path: string, bytes: Uint8Array) {
-  return /\.(png|jpe?g|webp)$/i.test(path) ||
+  try { detectPhoto(bytes, path); return true } catch { /* 扩展名候选交给 Worker 返回具体错误。 */ }
+  return /\.(png|jpe?g|webp|avif|heic|heif|tiff?|bmp|nef|nrw|cr2|cr3|arw|dng|raf|orf|rw2|pef|srw)$/i.test(path) ||
     (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) ||
     (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) ||
     (String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP')
 }
 export function looksLikeImage(path: string, bytes?: Uint8Array) {
-  return /\.(png|jpe?g|webp|gif|avif|heic|heif|bmp|tiff?|svg|ico|apng)$/i.test(path) ||
+  return /\.(png|jpe?g|webp|gif|avif|heic|heif|bmp|tiff?|svg|ico|apng|nef|nrw|cr2|cr3|arw|dng|raf|orf|rw2|pef|srw)$/i.test(path) ||
     (!!bytes && (supportedImageCandidate(path, bytes) || String.fromCharCode(...bytes.subarray(0, 3)) === 'GIF'))
 }
 export function checkedSize(size: number, max: number) {

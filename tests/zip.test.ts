@@ -35,6 +35,16 @@ describe('ZIP paths and output naming', () => {
   })
 })
 describe('ZIP full engine', () => {
+  it('passes RAW names to decoder and renames PNG fallback under original selection without collisions', async () => {
+    const raw=text('raw decoder validates content')
+    const input=await pack([{name:'camera.NEF',data:raw},{name:'camera.png',data:png}])
+    const encoder=vi.fn(async (_buffer: ArrayBuffer, _level: unknown, _target: unknown, name?: string) => ({buffer:png.slice().buffer,format:'png' as const,keptOriginal:false,notes:[name ?? '']}))
+    const result=await processZip(input,'preserve','original',encoder,()=>{})
+    expect(encoder.mock.calls[0]?.[3]).toBe('camera.NEF')
+    expect(result.rows[0].outputPath).toBe('camera-2.png')
+    expect((await unpack(result.blob))['camera-2.png']).toEqual(png)
+  })
+
   it('preserves folders, unicode, raw files, unsupported images and nested archives byte-for-byte', async () => {
     const nested = new Uint8Array(await (await pack([{name:'nested.txt',data:text('nested')}])).arrayBuffer())
     const input = await pack([{name:'空目录/',options:{directory:true}}, {name:'素材/图.png',data:png},{name:'readme.txt',data:text('中文资源说明')},{name:'animation.gif',data:text('GIF89a')},{name:'nested.zip',data:nested}])
@@ -72,7 +82,7 @@ describe('ZIP full engine', () => {
     expect((await unpack(result.blob))['timeout.png']).toEqual(png)
     expect(encoder).toHaveBeenCalledTimes(1)
   })
-  it('retains oversize image without invoking encoder', async () => {
+  it('retains invalid large image without invoking encoder', async () => {
     const input = await pack([{name:'large.png',data:new Uint8Array(10*1024*1024+1)}])
     const encoder=vi.fn(keep)
     const result = await processZip(input,'light','original',encoder,()=>{})

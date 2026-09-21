@@ -64,7 +64,7 @@ function launch(action: 'scan' | 'run') {
           image.onerror = () => finish({ error: '图片编码器运行失败' })
           image.onmessageerror = () => finish({ error: '图片结果读取失败' })
           imageTimer = setTimeout(() => finish({ error: '图片处理超过 60 秒' }), TIMEOUT_MS)
-          image.postMessage({ action: 'compress', buffer: data.buffer, level: data.level, target: data.target }, [data.buffer])
+          image.postMessage({ action: 'compress', buffer: data.buffer, level: data.level, target: data.target, name: data.name }, [data.buffer])
         } catch (e) { finish({ error: e instanceof Error ? e.message : '无法启动图片处理' }) }
       } else if (data.type === 'done') {
         rows.value = data.rows; done.value = data.rows.length
@@ -99,7 +99,7 @@ onBeforeUnmount(() => { revision++; stop(); dropResult() })
       <button v-if="result" class="button" @click="download">下载结果 ZIP</button>
     </div></header>
     <p class="zip-name">{{ file.name }} · 输入 {{ size(file.size) }} · {{ rows.length }} 个条目 · 声明解压大小 {{ size(expanded) }}</p>
-    <p v-if="target !== 'original'">转换格式会更改扩展名，HTML/CSS 等文件里的图片引用不会自动修改；重名会自动加序号。</p>
+    <p>转换格式会更改扩展名（HEIC/RAW 选择原格式也会转为 PNG），HTML/CSS 等文件里的图片引用不会自动修改；重名会自动加序号。</p>
     <p>保留目录结构、非图片文件和不支持的图片；图片处理失败保留原文件。内部压缩包不递归解压。RAR、加密包和分卷包暂不支持。</p>
     <p class="zip-status" :class="{ error: !!error }" role="status">{{ error || phase }}</p>
     <div v-if="busy || result"><progress :value="done" :max="total || 1" aria-label="ZIP 处理进度"></progress> {{ done }} / {{ total }} 个条目</div>
@@ -117,7 +117,7 @@ onBeforeUnmount(() => { revision++; stop(); dropResult() })
         </tr></tbody>
       </table>
     </div>
-    <p class="zip-limits">ZIP ≤ 50 MiB，最多 500 个文件/文件夹，解压及输出文件总量 ≤ 200 MiB；单图 ≤ 10 MiB / 1600 万像素。取消或发生压缩包错误时不提供部分结果。</p>
+    <p class="zip-limits">ZIP ≤ 50 MiB，最多 500 个文件/文件夹，解压及输出文件总量 ≤ 200 MiB；单图 ≤ 100 MiB / 6400 万像素。取消或发生压缩包错误时不提供部分结果。</p>
   </section>
 </template>
 <style scoped>

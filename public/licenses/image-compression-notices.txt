@@ -19,3 +19,27 @@ ZIP archive support:
 @zip.js/zip.js 2.15.0
 https://github.com/gildas-lormeau/zip.js
 BSD-3-Clause. See zipjs-BSD-3-Clause.txt.
+
+Photo format extension (2026-09-21):
+libheif-js 1.23.2: LGPL-3.0; libheif-LGPL-3.0.txt.
+https://github.com/catdad-experiments/libheif-js
+Source/build: https://github.com/catdad-experiments/libheif-js/tree/v1.23.2
+Includes upstream libheif and libde265; their copyright and licenses remain applicable.
+
+libraw-wasm 1.6.0 wrapper: ISC, author ybouane; contributors listed in npm package.json.
+https://github.com/ybouane/LibRaw-Wasm/tree/v1.6.0
+Standalone JS/WASM/map copied unmodified from npm dist to /vendor/libraw/.
+Rebuild with upstream compileLibraw.sh and replace the same three assets.
+Underlying LibRaw 0.22.1: LGPL-2.1 or CDDL-1.0; LGPL copy: libraw-LGPL-2.1.txt.
+https://github.com/LibRaw/LibRaw/tree/0.22.1
+Little CMS 2.19.1: MIT; lcms-MIT.txt.
+https://github.com/mm2/Little-CMS/tree/lcms2.19.1
+Additional underlying JPEG/PNG/zlib notices are retained in upstream sources.
+
+@jsquash/avif wrapper: Apache-2.0; jsquash-Apache-2.0.txt.
+https://github.com/jamsinclair/jSquash/tree/main/packages/avif
+Underlying libavif/AOM and other codec licenses remain applicable.
+
+utif 3.1.0: MIT; utif-MIT.txt.
+https://github.com/photopea/UTIF.js
+pako dependency: MIT and Zlib licenses, see https://github.com/nodeca/pako

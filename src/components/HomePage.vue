@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { Braces, Search, X } from '@lucide/vue'
 import { tools, toolCategories as categories } from '../tools/registry'
 import { toolIcons } from '../tools/icons'
+import { toolPath } from '../seo/site'
 
 const props = defineProps<{ category: string }>()
 const emit = defineEmits<{ 'show-all': [] }>()
@@ -31,7 +32,7 @@ defineExpose({ resetSearch })
 <template>
   <section class="home-page" aria-labelledby="home-title">
     <header class="home-heading">
-      <div><h1 id="home-title">{{ category || '首页' }}</h1><p>{{ category ? '浏览该分类下的工具，快速找到所需功能。' : '让重复的工作更简单。' }}</p></div>
+      <div><h1 id="home-title">{{ category || 'DevKit 开发工具箱' }}</h1><p>{{ category ? '浏览该分类下的工具，快速找到所需功能。' : 'JSON、编码转换、文本与图片处理，静态工具在浏览器本地运行。' }}</p></div>
       <label class="home-search">
         <Search :size="20" aria-hidden="true" />
         <input v-model="query" type="search" placeholder="搜索工具名称或用途…" aria-label="搜索首页工具" />
@@ -42,7 +43,7 @@ defineExpose({ resetSearch })
     <section v-for="group in groups" :key="group.category" class="home-category" :aria-labelledby="categoryId(group.category)">
       <h2 :id="categoryId(group.category)" tabindex="-1">{{ group.category }} <span>({{ group.items.length }})</span></h2>
       <div class="home-grid">
-        <a v-for="tool in group.items" :key="tool.id" class="tool-card" :href="'#/' + tool.id">
+        <a v-for="tool in group.items" :key="tool.id" class="tool-card" :href="toolPath(tool.id)">
           <span class="tool-card-icon" :class="'tone-' + (tones[tool.id] ?? 'purple')"><component :is="toolIcons[tool.id] ?? Braces" :size="27" :stroke-width="1.8" aria-hidden="true" /></span>
           <div class="tool-card-copy"><h3>{{ tool.name }}</h3><p>{{ tool.description || '打开并使用' + tool.name }}</p></div>
         </a>

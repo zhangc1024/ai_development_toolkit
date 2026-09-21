@@ -12,7 +12,7 @@ npm ci
 npm run dev
 ```
 
-浏览器访问 http://localhost:5173/#/home 。端口占用时以 Vite 实际输出为准。开发服务绑定所有网卡，供 Windows 访问 WSL；仅本机开发可改用 `npx vite --host 127.0.0.1`。
+浏览器访问 http://localhost:5173/ 。端口占用时以 Vite 实际输出为准。开发服务绑定所有网卡，供 Windows 访问 WSL；仅本机开发可改用 `npx vite --host 127.0.0.1`。
 
 ```bash
 npm test          # 所有工具的核心逻辑与边界测试
@@ -74,7 +74,7 @@ npm run preview  # 本地预览 dist，默认 4173
 
 ## 静态部署
 
-上传 `dist/` 的全部内容至静态托管或对象存储/CDN。资源路径为相对路径，路由使用 Hash，无需后端路由回退。
+执行 `npm run build` 自动生成首页与每个工具的静态 HTML、站点地图和 robots.txt。上传 `dist/` 的全部内容至域名根目录，资源共用。正式域名为 https://tools.zhangc.net ，工具地址为 `/tools/{id}/`，旧 Hash 链接保持兼容。服务器应为未知路径返回真实 404，不能统一回退首页。详见 [SEO 与部署说明](docs/SEO_DEPLOYMENT.md)。
 
 必须通过 HTTP(S) 提供网页，不要双击 `dist/index.html`：模块脚本和 Worker 在 `file://` 环境下可能被阻止。线上使用 HTTPS，保证剪贴板等浏览器能力可用。
 
@@ -94,7 +94,7 @@ npm run preview  # 本地预览 dist，默认 4173
 
 ## 图片压缩与格式转换
 
-新增四档压缩和原格式 / WebP / PNG / JPG 转换，支持本地图片选择、拖放、粘贴、体积统计、滑块对比与下载。入口为图片工具 → 图片压缩 / 格式转换（`#/image-compress`）。规则、保真边界与依赖许可见 [IMAGE_COMPRESSION.md](docs/IMAGE_COMPRESSION.md)。
+支持手机 HEIC/HEIF、常见相机 RAW 和普通图片导入，四档压缩及 PNG / JPG / WebP / AVIF / TIFF / BMP 导出，支持本地图片选择、拖放、粘贴、体积统计、滑块对比与下载。入口为图片工具 → 图片压缩 / 格式转换（`#/image-compress`）。规则、保真边界与依赖许可见 [IMAGE_COMPRESSION.md](docs/IMAGE_COMPRESSION.md)。
 
 图片压缩现支持 ZIP 批量处理：解包后处理图片，保留目录和其他文件，提供结果 ZIP 下载。限制和规则见 [ZIP_IMAGE_PROCESSING.md](docs/ZIP_IMAGE_PROCESSING.md)。
 
@@ -112,7 +112,7 @@ npm run preview  # 本地预览 dist，默认 4173
 
 ## 工具箱首页
 
-默认入口为 `#/home`，按类别展示注册表中全部已上线工具及用途说明。支持按名称、用途和分类搜索；点击左侧分类只显示该类工具，点击“首页”恢复全部分类；选中分类时搜索只在该分类内进行，点击卡片进入工具。原有 `#/json` 等工具地址保持有效。工具名称与描述统一维护在 `src/tools/registry.ts`，无需重复维护首页列表。
+默认入口为 `/`（兼容 `#/home`），按类别展示注册表中全部已上线工具及用途说明。支持按名称、用途和分类搜索；点击左侧分类只显示该类工具，点击“首页”恢复全部分类；选中分类时搜索只在该分类内进行，点击卡片进入工具。原有 `#/json` 等工具地址保持有效。工具名称与描述统一维护在 `src/tools/registry.ts`，无需重复维护首页列表。
 
 首页与侧栏分类顺序统一为：数据处理、编码转换、常用工具、安全与签名、文本处理、图片工具、AI 工具、参考查询，统一由注册表中的分类顺序维护。
 

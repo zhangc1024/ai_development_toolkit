@@ -7,7 +7,7 @@ Vue 3 Composition API + TypeScript，Vite 构建，CodeMirror 编辑器，jsonc-
 ```text
 src/
   main.ts                      应用启动
-  App.vue                      菜单、Hash 地址与公共外壳
+  App.vue                      菜单、独立路径与公共外壳
   style.css                    全局样式与响应式规则
   components/CodeEditor.vue    编辑器生命周期、搜索、折叠、跳转
   platform/browser.ts          剪贴板和文件下载
@@ -48,12 +48,12 @@ jsonc-parser 名字包含 JSONC，但本项目明确设置 disallowComments=true
 
 1. 创建独立页面与纯函数模块，在 registry.ts 中将条目改为 ready，增加 defineAsyncComponent 懒加载组件。
 2. 可选 props 字段传递固定的页面配置；现有四种编码页面共用 EncodingTool.vue，通过 kind 区分。
-3. 元信息包含唯一 id、中文 name、category、status。菜单按注册表自动生成，页面地址为 #/{id}。
+3. 元信息包含唯一 id、中文 name、category、status。菜单按注册表自动生成，页面地址为 /tools/{id}/，旧 #/{id} 地址保持兼容。
 4. App.vue 使用 active.id 作为组件 key，保证同一页面组件的不同工具实例不会共享旧输入或运行中的任务。
 5. 核心函数不依赖 DOM、Vue、文件系统；系统能力放 platform。编码工作区默认纯文本编辑器，不套用 JSON 语法。
 6. 耗时处理用 Worker，限制容量和时间；补充规则文档与边界测试。
 
-当前 Hash 路由支持独立工具页与未知地址提示，暂不引入路由库。窄屏菜单横向滚动，桌面菜单纵向滚动，避免新增工具后菜单被截断。
+当前使用 History API 支持独立工具页与未知地址提示，暂不引入路由库。窄屏菜单横向滚动，桌面菜单纵向滚动，避免新增工具后菜单被截断。
 
 ## 5. 开发与验证
 
@@ -73,10 +73,10 @@ Vitest 检查无损转换、严格拒绝、根值、缩进、错误定位、容�
 
 ## 6. 静态/CDN 部署
 
-`npm run build` 生成 dist。必须一并上传 index.html 和 assets 内全部资源，包括 Worker 文件。
+`npm run build` 自动生成静态页面与 dist。必须上传整个 dist，包括所有工具目录、sitemap.xml、robots.txt、404.html 和 assets。详见 [SEO_DEPLOYMENT.md](SEO_DEPLOYMENT.md)。
 
-- `base: './'` 使构建资源使用相对路径，支持部署到子目录。
-- Hash 路由避免静态主机路由回退要求。
+- `base: '/'` 使用根路径资源，当前部署目标是域名根目录。
+- 工具目录直接提供静态 HTML；未知路径返回真实 404，不统一回退首页。
 - index.html 建议短缓存/重新验证；带内容哈希的 assets 可长缓存。
 - 发布时先上传新资源再更新 HTML，保留旧资源一段时间，避免旧页面动态加载失败。
 - JS 和 Worker 正确返回 JavaScript MIME；不要把缺失 JS 资源改写成 HTML。

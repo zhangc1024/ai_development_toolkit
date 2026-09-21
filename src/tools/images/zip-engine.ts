@@ -1,10 +1,10 @@
 import { BlobReader, Uint8ArrayReader, ZipReader, ZipWriter, type Entry, type FileEntry } from '@zip.js/zip.js'
-import { MAX_IMAGE_BYTES } from './core'
+import { MAX_PHOTO_BYTES, detectPhoto } from './photo-formats'
 import { inspectImage, type CompressionLevel, type ImageFormat, type TargetFormat } from './compression'
 import { checkedSize, createZipNamer, looksLikeImage, safeZipPath, supportedImageCandidate, validateZipPaths, ZIP_LIMITS, type ZipLimits, type ZipRow } from './zip-policy'
 
 export interface ImageZipResult { buffer: ArrayBuffer; format: ImageFormat; keptOriginal: boolean; notes: string[] }
-export type ZipImageProcessor = (buffer: ArrayBuffer, level: CompressionLevel, target: TargetFormat) => Promise<ImageZipResult>
+export type ZipImageProcessor = (buffer: ArrayBuffer, level: CompressionLevel, target: TargetFormat, name?: string) => Promise<ImageZipResult>
 export type ZipProgress = { phase: 'extract' | 'image' | 'pack'; index: number; total: number; path: string; row?: ZipRow }
 export async function openZip(file: Blob, limits: ZipLimits = ZIP_LIMITS) {
   if (!file.size || file.size > limits.archiveBytes) throw Error('ZIP 必须非空且不超过 50 MiB')
@@ -82,12 +82,13 @@ export async function processZip(file: Blob, level: CompressionLevel, target: Ta
         if (supportedImageCandidate(row.path, original)) {
           row.image = true
           try {
-            if (actual > MAX_IMAGE_BYTES) throw Error('图片超过 10 MiB')
-            inspectImage(original)
+            if (actual > MAX_PHOTO_BYTES) throw Error('图片超过 100 MiB')
+            const inputFormat = detectPhoto(original, row.path)
+            if (['png', 'jpg', 'webp'].includes(inputFormat)) inspectImage(original, true)
             notify('image')
-            const result = await processImage(original.slice().buffer, level, target)
+            const result = await processImage(original.slice().buffer, level, target, row.path)
             output = new Uint8Array(result.buffer)
-            if (target !== 'original' && !result.keptOriginal) outputPath = nameFor(row.path, result.format)
+            if (!result.keptOriginal && (target !== 'original' || result.format !== inputFormat)) outputPath = nameFor(row.path, result.format)
             row.status = result.keptOriginal ? 'kept' : 'processed'
             row.reason = result.notes.join('；') || (result.keptOriginal ? '保留原图' : '处理完成')
           } catch (e) {

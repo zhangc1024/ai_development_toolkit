@@ -16,10 +16,10 @@ self.onmessage = async ({ data }: MessageEvent) => {
       self.postMessage({ type: 'scanned', ...await scanZip(data.file) })
     } else if (data.type === 'run') {
       const result = await processZip(data.file, data.level as CompressionLevel, data.target as TargetFormat,
-        (buffer, level, target) => new Promise((resolve, reject) => {
+        (buffer, level, target, name) => new Promise((resolve, reject) => {
           const id = ++sequence
           pending = { id, resolve, reject }
-          self.postMessage({ type: 'image', id, buffer, level, target }, { transfer: [buffer] })
+          self.postMessage({ type: 'image', id, buffer, level, target, name }, { transfer: [buffer] })
         }),
         progress => self.postMessage({ type: 'progress', ...progress }))
       self.postMessage({ type: 'done', ...result })
