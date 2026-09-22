@@ -32,6 +32,7 @@ export const tools: ToolDefinition[] = [
   { id: 'random', name: '随机字符串生成', description: '按需生成随机字符组合', category: '常用工具', status: 'ready', component: defineAsyncComponent(() => import('./productivity/ProductivityTool.vue')), props: { kind: 'random' } },
   { id: 'diff', name: '文本 Diff', description: '逐行对比，快速发现文本差异', category: '文本处理', status: 'ready', component: defineAsyncComponent(() => import('./productivity/ProductivityTool.vue')), props: { kind: 'diff' } },
   { id: 'text', name: '文本去重 / 排序 / 去空行', description: '清理重复内容，整理文本行', category: '文本处理', status: 'ready', component: defineAsyncComponent(() => import('./productivity/ProductivityTool.vue')), props: { kind: 'text' } },
+  { id: 'ascii', name: 'ASCII 对照表', description: '查询 ASCII 字符、进制编码与控制字符说明', category: '参考查询', status: 'ready', component: defineAsyncComponent(() => import('./ascii/AsciiTool.vue')) },
   { id: 'http-status', name: 'HTTP 状态码查询', description: '查询状态码含义与使用场景', category: '参考查询', status: 'ready', component: defineAsyncComponent(() => import('./productivity/ProductivityTool.vue')), props: { kind: 'http-status' } },
   { id: 'image-base64', name: '图片 ↔ Base64', description: '图片与 Base64 字符串互转', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./images/ImageTool.vue')), props: { kind: 'image-base64' } },
   { id: 'qr-reader', name: '二维码识别', description: '从图片中提取二维码内容', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./images/ImageTool.vue')), props: { kind: 'qr-reader' } },
