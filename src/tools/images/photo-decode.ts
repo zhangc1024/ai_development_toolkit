@@ -56,7 +56,10 @@ export async function decodePhoto(buffer: ArrayBuffer, name: string) {
     bitmap = await createImageBitmap(new ImageData(new Uint8ClampedArray(pixels), image.width, image.height))
     notes.push('TIFF 转换为 8 位 RGBA，不保留原始位深、ICC 或拍摄元数据。')
   } else {
-    if (['png', 'jpg', 'webp'].includes(format)) inspectImage(new Uint8Array(buffer), true)
+    if (['png', 'jpg', 'webp'].includes(format)) {
+      const inspected = inspectImage(new Uint8Array(buffer), true)
+      if (inspected.additionalImages) notes.push('此 JPG 包含附加图像（可能是 HDR 增益图）；重新编码只处理浏览器解码的主图，附加图像不会进入转换结果。原格式保真档保留完整原文件。')
+    }
     if (format === 'bmp') {
       const view = new DataView(buffer)
       if (buffer.byteLength < 54 || view.getUint32(14, true) < 40) throw Error('仅支持 Windows BMP 图片')

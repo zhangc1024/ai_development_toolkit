@@ -93,7 +93,7 @@ export async function processZip(file: Blob, level: CompressionLevel, target: Ta
             row.reason = result.notes.join('；') || (result.keptOriginal ? '保留原图' : '处理完成')
           } catch (e) {
             const reason = e instanceof Error ? e.message : String(e)
-            const unsupported = /暂不支持 (?:APNG|动态 WebP|多图片 JPEG)|不支持 GIF 或动画/.test(reason)
+            const unsupported = /暂不支持 (?:APNG|动态 WebP)|不支持 GIF 或动画/.test(reason)
             row.status = unsupported ? 'kept' : 'failed'
             row.reason = (unsupported ? '不支持此图片，保留原文件：' : '处理失败，保留原文件：') + reason
             output = original

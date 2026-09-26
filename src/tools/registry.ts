@@ -6,6 +6,7 @@ const encodingPage = defineAsyncComponent(() => import('./encoding/EncodingTool.
 /** 新工具只需注册元信息和页面。planned 不加载组件，也不允许导航。 */
 export interface ToolDefinition { id: string; name: string; description?: string; category: string; icon?: string; status: 'ready' | 'planned'; component?: Component; props?: Record<string, string> }
 export const tools: ToolDefinition[] = [
+  { id: 'file-integrity', name: '文件完整性校验', description: '分片计算文件 MD5 / SHA 摘要，校验文件完整性', category: '安全与签名', status: 'ready', component: defineAsyncComponent(() => import('./file-integrity/FileIntegrityTool.vue')) },
   { id: 'markdown-params', name: 'Markdown 参数转换器', description: 'Markdown 参数表转换为 JSON、PHP、JavaScript、Python', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./markdown-params/MarkdownParamsTool.vue')) },
   { id: 'ai-chat', name: '本地 AI 聊天', description: '连接 Ollama，多轮对话与本地会话保存', category: 'AI 工具', status: 'ready', component: defineAsyncComponent(() => import('./chat/ChatTool.vue')) },
   { id: 'prompt', name: '提示词优化', description: '整理需求，生成结构化提示词', category: 'AI 工具', status: 'ready', component: defineAsyncComponent(() => import('./prompt/PromptTool.vue')) },
@@ -15,7 +16,7 @@ export const tools: ToolDefinition[] = [
   { id: 'json', name: 'JSON 格式化', description: '格式化、压缩与语法校验', category: '数据处理', icon: 'braces', status: 'ready', component: defineAsyncComponent(() => import('./json/JsonTool.vue')) },
   { id: 'json-diff', name: 'JSON 结构化对比', description: '对比字段变化，定位结构差异', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./json-diff/JsonDiffTool.vue')) },
   { id: 'php-array', name: 'JSON ↔ PHP / Python', description: 'JSON、PHP 与 Python 数据互转', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./literals/LiteralTool.vue')) },
-  { id: 'sql', name: 'SQL 格式化', description: '整理 SQL 缩进与关键字大小写', category: '数据处理', status: 'ready', component: workbenchPage, props: { kind: 'sql' } },
+  { id: 'sql', name: 'MySQL SQL 分析器', description: 'SQL 格式化、静态风险、索引辅助与 EXPLAIN 分析', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./sql/SqlTool.vue')) },
   { id: 'url', name: 'URL 编解码', description: '编码或还原 URL 与参数', category: '编码转换', status: 'ready', component: encodingPage, props: { kind: 'url' } },
   { id: 'base64', name: 'Base64 编解码', description: '文本与 Base64 编码互转', category: '编码转换', status: 'ready', component: encodingPage, props: { kind: 'base64' } },
   { id: 'unicode', name: 'Unicode 编解码', description: '中文与 Unicode 转义互转', category: '编码转换', status: 'ready', component: encodingPage, props: { kind: 'unicode' } },

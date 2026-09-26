@@ -17,14 +17,32 @@ export const QUALITY = {
   strong: { jpeg: 65, webp: 60, pngMin: 45, pngTarget: 70 },
 } as const
 export const TIMEOUT_MS = 60000
+function isMultiPictureJpeg(view: DataView, start: number, end: number) {
+  const tiff = start + 4
+  if (tiff + 8 > end) return false
+  const endian = view.getUint16(tiff)
+  if (endian !== 0x4949 && endian !== 0x4d4d) return false
+  const little = endian === 0x4949
+  if (view.getUint16(tiff + 2, little) !== 42) return false
+  const ifd = tiff + view.getUint32(tiff + 4, little)
+  if (ifd < tiff || ifd + 2 > end) return false
+  const entries = view.getUint16(ifd, little)
+  for (let i = 0; i < entries && ifd + 2 + (i + 1) * 12 <= end; i++) {
+    const entry = ifd + 2 + i * 12
+    if (view.getUint16(entry, little) === 0xb001 && view.getUint16(entry + 2, little) === 4 && view.getUint32(entry + 4, little) === 1) {
+      return view.getUint32(entry + 8, little) > 1
+    }
+  }
+  return false
+}
 /** Inspect container before allocating a decoded bitmap. Browser decoder validates compressed payload. */
-export function inspectImage(bytes: Uint8Array, photo = false): { format: ImageFormat; width: number; height: number } {
+export function inspectImage(bytes: Uint8Array, photo = false): { format: ImageFormat; width: number; height: number; additionalImages?: boolean } {
   const type = photo ? { ext: detectPhoto(bytes) } : imageType(bytes)
   const validate = photo ? validatePhotoDimensions : validateDimensions
   if (type.ext === 'gif') throw Error('仅支持静态 PNG、JPG、WebP，不支持 GIF 或动画')
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const tag = (offset: number) => String.fromCharCode(...bytes.subarray(offset, offset + 4))
-  let width = 0, height = 0
+  let width = 0, height = 0, additionalImages = false
   const invalid = () => { throw Error('图片文件结构不完整或不受支持') }
   if (type.ext === 'png') {
     let offset = 8, ended = false, seenData = false
@@ -88,13 +106,12 @@ export function inspectImage(bytes: Uint8Array, photo = false): { format: ImageF
         height = view.getUint16(offset + 3); width = view.getUint16(offset + 5)
         validate(width, height)
       }
-      // MPO multi-picture JPEG is not silently flattened.
-      if (marker === 0xe2 && size >= 6 && tag(offset + 2) === 'MPF\0') throw Error('暂不支持多图片 JPEG / MPO')
+      if (marker === 0xe2 && size >= 6 && tag(offset + 2) === 'MPF\0' && isMultiPictureJpeg(view, offset + 2, offset + size)) additionalImages = true
       offset += size
     }
   }
   validate(width, height)
-  return { format: type.ext as ImageFormat, width, height }
+  return { format: type.ext as ImageFormat, width, height, ...(additionalImages ? { additionalImages } : {}) }
 }
 export function selectOutput(original: ArrayBuffer, encoded: ArrayBuffer, target: TargetFormat) {
   const keptOriginal = target === 'original' && encoded.byteLength >= original.byteLength

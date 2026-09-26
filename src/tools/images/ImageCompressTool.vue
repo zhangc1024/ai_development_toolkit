@@ -163,7 +163,7 @@ onBeforeUnmount(() => { clear(); window.removeEventListener('paste', paste) })
     <section class="encoding-rules">
       <h2>使用说明</h2>
       <ul>
-        <li>不缩放图片；有方向信息的照片按浏览器显示方向处理。处理静态单张图片，拒绝 GIF、APNG、动态 WebP、多图片 JPEG、HEIF/AVIF 序列及多页 TIFF。</li>
+        <li>不缩放图片；有方向信息的照片按浏览器显示方向处理。处理静态图片；带附加图像的 JPG 可导入，重新编码只处理主图。拒绝 GIF、APNG、动态 WebP、HEIF/AVIF 序列及多页 TIFF。</li>
         <li>可编码的原格式结果不小于原文件时保留原文件；HEIC/RAW 的“原格式”会转换为 PNG；主动转换格式时仍可下载转换结果。</li>
         <li>PNG 的有损档会尝试减少颜色数量；未达到质量要求时回退无损结果。较强档位会比较多个候选，选择更小文件。</li>
         <li>PNG 原格式保真档直接优化原始数据；JPG/WebP 原格式保真档保留原文件。其他重新编码可能转为 8 位 sRGB，并移除 EXIF 等元数据，广色域、HDR 或 16 位素材请另行保存原片，HEIC/RAW 转换不保留原始数据。</li>

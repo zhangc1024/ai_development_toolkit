@@ -45,6 +45,26 @@ describe('compression input boundaries', () => {
     const bytes = new Uint8Array([255,216,255,192,0,11,8,0,20,0,10,1,1,17,0,255,218])
     expect(inspectImage(bytes)).toEqual({format:'jpg',width:10,height:20})
   })
+  it('accepts JPG with MPF metadata and identifies additional images', () => {
+    for (const little of [true, false]) {
+      for (const count of [1, 2]) {
+        const app = new Uint8Array(32), view = new DataView(app.buffer)
+        view.setUint16(0, app.length)
+        app.set([77, 80, 70, 0], 2)
+        app.set(little ? [73, 73] : [77, 77], 6)
+        view.setUint16(8, 42, little)
+        view.setUint32(10, 8, little)
+        view.setUint16(14, 1, little)
+        view.setUint16(16, 0xb001, little)
+        view.setUint16(18, 4, little)
+        view.setUint32(20, 1, little)
+        view.setUint32(24, count, little)
+        const bytes = new Uint8Array([255,216,255,226,...app,255,192,0,11,8,0,20,0,10,1,1,17,0,255,218])
+        if (count === 1) expect(inspectImage(bytes)).toEqual({format:'jpg',width:10,height:20})
+        else expect(inspectImage(bytes)).toEqual({format:'jpg',width:10,height:20,additionalImages:true})
+      }
+    }
+  })
   it('rejects GIF, SVG, empty input and files above limit', () => {
     for (const bytes of [new Uint8Array(),new Uint8Array([71,73,70,56,57,97]),new TextEncoder().encode('<svg/>'),new Uint8Array(10*1024*1024+1)]) expect(() => inspectImage(bytes)).toThrow()
   })
