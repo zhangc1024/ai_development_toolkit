@@ -25,6 +25,7 @@ export const tools: ToolDefinition[] = [
   { id: 'hash', name: 'MD5 / SHA 哈希', description: '计算文本摘要与哈希值', category: '安全与签名', status: 'ready', component: workbenchPage, props: { kind: 'hash' } },
   { id: 'rsa', name: 'RSA 加密 / 解密', description: '生成密钥，进行公钥加密与私钥解密', category: '安全与签名', status: 'ready', component: defineAsyncComponent(() => import('./rsa/RsaTool.vue')) },
   { id: 'hmac', name: 'HMAC 签名', description: '使用密钥计算消息签名', category: '安全与签名', status: 'ready', component: workbenchPage, props: { kind: 'hmac' } },
+  { id: 'data-size', name: '数据大小转换', description: 'B、KB、MB、GB、TB 互转，支持 1024 与 1000 换算基准', category: '常用工具', status: 'ready', component: defineAsyncComponent(() => import('./data-size/DataSizeTool.vue')) },
   { id: 'timestamp', name: '时间戳转换', description: '日期时间与秒、毫秒时间戳互转', category: '常用工具', status: 'ready', component: defineAsyncComponent(() => import('./timestamp/TimestampTool.vue')) },
   { id: 'regex', name: '正则表达式测试', description: '测试匹配规则，查看匹配结果', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./extra/ExtraTool.vue')), props: { kind: 'regex' } },
   { id: 'qrcode', name: '二维码生成', description: '将文本或链接生成二维码', category: '常用工具', status: 'ready', component: defineAsyncComponent(() => import('./extra/ExtraTool.vue')), props: { kind: 'qrcode' } },
