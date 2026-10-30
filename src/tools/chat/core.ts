@@ -7,6 +7,8 @@ export interface ChatMessage {
   error?: string
 }
 export interface Conversation { id: string; title: string; updatedAt: number; messages: ChatMessage[] }
+export type ConversationSummary = Omit<Conversation, 'messages'>
+export function conversationSummary({ id, title, updatedAt }: Conversation): ConversationSummary { return { id, title, updatedAt } }
 export const MAX_INPUT_CHARS = 12000
 export const MAX_CONTEXT_CHARS = 24000
 export const MAX_CONTEXT_TURNS = 20

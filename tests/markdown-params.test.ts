@@ -78,3 +78,12 @@ describe('Markdown 参数转换器', () => {
   expect(convertTable(t,autoMap(t.headers),'json','4').output).toBe('{\n    "a": 0\n}')
  })
 })
+
+describe('整数默认值的精确校验', () => {
+ it.each(['1.0000000000000001', '9007199254740992.5', '-9007199254740992.5', '1e-400', '100e-3'])('拒绝被浮点舍入掩盖的小数 %s', value => {
+  expect(() => run('|key|type|default|\n|---|---|---|\n|count|integer|' + value + '|')).toThrow('不匹配')
+ })
+ it.each(['9223372036854775807', '1.0', '1.50e2', '100e-2', '0e-400', '-0.000'])('允许数学上的整数并保留原文 %s', value => {
+  expect(run('|key|type|default|\n|---|---|---|\n|count|integer|' + value + '|').output).toContain(value)
+ })
+})

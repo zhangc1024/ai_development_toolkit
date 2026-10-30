@@ -65,6 +65,15 @@ export function autoMap(headers: string[]): Mapping {
 const aliases: Record<string, string> = { int: 'integer', integer: 'integer', number: 'number', float: 'number', double: 'number', string: 'string', text: 'string', bool: 'boolean', boolean: 'boolean', array: 'array', list: 'array', object: 'object', json: 'object', null: 'null' }
 const defaults: Record<string, string> = { integer: '0', number: '0', string: '""', boolean: 'false', array: '[]', object: '{}', null: 'null' }
 function kind(value: unknown): string { return value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value }
+// Judge the decimal token before Number parsing can round away its fraction.
+function isIntegerToken(text: string): boolean {
+ const match = /^-?(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text)
+ if (!match) return false
+ const fraction = match[2] ?? '', digits = (match[1]! + fraction).replace(/0+$/, '')
+ if (!digits) return true
+ const trailing = match[1]!.length + fraction.length - digits.length
+ return BigInt(match[3] ?? '0') >= BigInt(fraction.length - trailing)
+}
 function valueFor(raw: string, typeName: string): { json: string; type: string } {
  const name = plainCell(typeName).toLowerCase(), type = name ? aliases[name] : ''
  if (name && !type) throw Error('不支持的类型「' + name + '」')
@@ -86,7 +95,7 @@ function valueFor(raw: string, typeName: string): { json: string; type: string }
   return { json: JSON.stringify(text), type: 'string' }
  }
  const actual = kind(parsed)
- if (type && (type === 'integer' ? actual !== 'number' || !Number.isInteger(parsed) : actual !== type)) throw Error('默认值与 ' + type + ' 类型不匹配')
+ if (type && (type === 'integer' ? actual !== 'number' || !isIntegerToken(text) : actual !== type)) throw Error('默认值与 ' + type + ' 类型不匹配')
  if (typeof parsed === 'number' && !Number.isFinite(parsed)) throw Error('数字超出可表示范围')
  // 使用已有字面量解析器校验并保留数字原文，不经 JSON.stringify 数字重编码。
  convertLiteral(text, 'json', 'json')

@@ -1,11 +1,14 @@
 import { inspectImage } from './compression'
 import { detectPhoto, RAW_EXTENSIONS, validatePhotoDimensions, type RawFormat } from './photo-formats'
 import type { Metadata, RawImageData } from 'libraw-wasm'
+import { decodeEmbeddedJpeg, nikonHighEfficiency } from './raw-preview'
 
-export async function decodePhoto(buffer: ArrayBuffer, name: string) {
+export async function decodePhoto(buffer: ArrayBuffer, name: string, options: { allowEmbeddedRawPreview?: boolean } = {}) {
   const format = detectPhoto(new Uint8Array(buffer), name)
   const notes: string[] = []
   let bitmap: ImageBitmap
+  let shooting: Metadata | undefined
+  let embeddedPreview = false
   if (RAW_EXTENSIONS.includes(format as RawFormat)) {
     if (!globalThis.crossOriginIsolated) throw Error('RAW 解码需要站点开启跨源隔离（COOP/COEP）；请联系站点管理员按部署说明配置，或先用相机软件导出 TIFF/JPG。')
     const url = new URL('/vendor/libraw/libraw.js', self.location.origin).href
@@ -14,17 +17,29 @@ export async function decodePhoto(buffer: ArrayBuffer, name: string) {
     const raw = new module.LibRaw()
     try {
       raw.open(new Uint8Array(buffer), { useCameraWb: true, outputColor: 1, outputBps: 8, halfSize: false })
-      const metadata: Metadata = raw.metadata(false)
+      const metadata: Metadata = raw.metadata(format === 'nef' || format === 'nrw')
+      // The direct WASM binding returns epoch seconds; the package wrapper converts them to Date.
+      const timestamp = metadata.timestamp as unknown
+      shooting = { ...metadata, timestamp: typeof timestamp === 'number' ? new Date(timestamp * 1000) : metadata.timestamp }
       validatePhotoDimensions(metadata.raw_width, metadata.raw_height)
-      const image: RawImageData = raw.imageData()
-      validatePhotoDimensions(image.width, image.height)
-      if (image.bits !== 8 || image.colors !== 3 || image.data.length !== image.width * image.height * 3) throw Error('RAW 解码未返回有效的 8 位 RGB 图像')
-      const rgba = new Uint8ClampedArray(image.width * image.height * 4)
-      for (let i = 0, j = 0; i < image.data.length; i += 3, j += 4) {
-        rgba[j] = image.data[i]; rgba[j + 1] = image.data[i + 1]; rgba[j + 2] = image.data[i + 2]; rgba[j + 3] = 255
+      const highEfficiency = nikonHighEfficiency(metadata)
+      if (highEfficiency) {
+        // Do not call imageData(): this WASM build returns colored stripes rather than an error for HE/HE*.
+        if (!options.allowEmbeddedRawPreview) throw Error('此 NEF 使用尼康高效率 ' + highEfficiency + ' 压缩，当前解码器不支持原始像素解码；请使用 Nikon NX Studio 导出 JPG/TIFF，或在照片水印边框工具中使用内嵌 JPEG')
+        bitmap = await decodeEmbeddedJpeg(raw.thumbnailData(), metadata.flip)
+        embeddedPreview = true
+        notes.push('此 NEF 使用尼康高效率 ' + highEfficiency + ' 压缩，已使用内嵌的相机 JPEG（' + bitmap.width + ' × ' + bitmap.height + '）进行预览和导出；保留拍摄信息，不代表 RAW 原始像素解码。')
+      } else {
+        const image: RawImageData = raw.imageData()
+        validatePhotoDimensions(image.width, image.height)
+        if (image.bits !== 8 || image.colors !== 3 || image.data.length !== image.width * image.height * 3) throw Error('RAW 解码未返回有效的 8 位 RGB 图像')
+        const rgba = new Uint8ClampedArray(image.width * image.height * 4)
+        for (let i = 0, j = 0; i < image.data.length; i += 3, j += 4) {
+          rgba[j] = image.data[i]; rgba[j + 1] = image.data[i + 1]; rgba[j + 2] = image.data[i + 2]; rgba[j + 3] = 255
+        }
+        bitmap = await createImageBitmap(new ImageData(rgba, image.width, image.height))
+        notes.push('RAW 已完整解码为 8 位 sRGB，使用相机白平衡；观感可能不同于相机 JPEG，不保留传感器原始数据或拍摄元数据。')
       }
-      bitmap = await createImageBitmap(new ImageData(rgba, image.width, image.height))
-      notes.push('RAW 已完整解码为 8 位 sRGB，使用相机白平衡；观感可能不同于相机 JPEG，不保留传感器原始数据或拍摄元数据。')
     } catch (error) {
       throw Error('RAW 解码失败：该相机型号、压缩方式可能不受支持，或文件已损坏。' + (error instanceof Error ? error.message : String(error)))
     } finally { raw.delete() }
@@ -69,7 +84,7 @@ export async function decodePhoto(buffer: ArrayBuffer, name: string) {
   }
   try { validatePhotoDimensions(bitmap.width, bitmap.height) }
   catch (error) { bitmap.close(); throw error }
-  return { bitmap, format, notes }
+  return { bitmap, format, notes, shooting, embeddedPreview }
 }
 
 export async function previewBlob(bitmap: ImageBitmap) {

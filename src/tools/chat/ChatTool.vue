@@ -3,19 +3,21 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MessageCircle, Plus, Send, Square, Copy, Trash2, Settings } from '@lucide/vue'
 import { aiSettings, aiSettingsWarning, openAiSettings } from '../../ai/settings'
 import { copyText } from '../../platform/browser'
-import { buildContext, MAX_INPUT_CHARS, type Conversation, type ChatMessage } from './core'
+import { buildContext, conversationSummary, MAX_INPUT_CHARS, type Conversation, type ConversationSummary, type ChatMessage } from './core'
 import { streamChat } from './ollama'
 import { loadChatSettings, saveChatSettings } from './settings'
-import { clearConversations, deleteConversation, loadConversations, saveConversation } from './storage'
+import { clearConversations, deleteConversation, loadConversations, loadConversation, saveConversation } from './storage'
+import { chatWrites } from './write-queue'
 
 const restoredSettings = loadChatSettings()
 const thinking = ref(restoredSettings.thinking)
 const settingsWarning = ref(restoredSettings.warning)
-const conversations = ref<Conversation[]>([])
+const conversations = ref<ConversationSummary[]>([])
 const activeId = ref('')
 const input = ref('')
 const loading = ref(true)
 const busy = ref(false)
+const deleting = ref(false)
 const storageStatus = ref('正在读取本地会话…')
 const storageFailed = ref(false)
 const notice = ref('')
@@ -23,21 +25,22 @@ const connection = ref('未连接')
 const omitted = ref(0)
 const messageList = ref<HTMLElement>()
 const followBottom = ref(true)
-const current = computed(() => conversations.value.find(item => item.id === activeId.value))
+const current = ref<Conversation>()
 const ordered = computed(() => [...conversations.value].sort((a, b) => b.updatedAt - a.updatedAt))
 const configured = computed(() => Boolean(aiSettings.model && aiSettings.baseUrl))
 let generation: AbortController | undefined
 let pending: { conversation: Conversation; reply: ChatMessage } | undefined
 let saveTimer: ReturnType<typeof setTimeout> | undefined
-let writes = Promise.resolve()
 let disposed = false
 function id() { return crypto.randomUUID() }
 function persist(conversation: Conversation) {
-  const snapshot: Conversation = JSON.parse(JSON.stringify(conversation))
+  const summary = conversationSummary(conversation)
+  const index = conversations.value.findIndex(item => item.id === summary.id)
+  if (index >= 0) conversations.value[index] = summary
   storageStatus.value = '正在保存…'
-  writes = writes.then(async () => {
+  void chatWrites.save(conversation.id, async () => {
     try {
-      await saveConversation(snapshot)
+      await saveConversation(conversation)
       storageFailed.value = false
       storageStatus.value = '聊天记录已保存在此浏览器'
     } catch {
@@ -65,40 +68,71 @@ function stop() {
   notice.value = '已停止生成。'
   connection.value = '已停止'
 }
-function newConversation() {
-  stop()
+function createConversation() {
   const conversation: Conversation = { id: id(), title: '新对话', updatedAt: Date.now(), messages: [] }
-  conversations.value.unshift(conversation)
+  conversations.value.unshift(conversationSummary(conversation))
+  current.value = conversation
   activeId.value = conversation.id; input.value = ''; notice.value = ''; omitted.value = 0
   followBottom.value = true
   persist(conversation)
 }
-function selectConversation(conversation: Conversation) {
-  if (activeId.value === conversation.id) return
-  stop(); activeId.value = conversation.id; input.value = ''; notice.value = ''; omitted.value = 0
+async function newConversation() {
+  if (loading.value || deleting.value || disposed) return
+  stop(); loading.value = true
+  try {
+    await chatWrites.flush()
+    if (disposed) return
+    if (current.value && storageFailed.value) { notice.value = '请先重试保存当前对话，再新建对话。'; return }
+    createConversation()
+  } finally { loading.value = false }
+}
+async function loadActive(summary?: ConversationSummary) {
+  const conversation = summary ? await loadConversation(summary.id) : undefined
+  if (summary && !conversation) throw new Error('对话已不存在，请刷新会话列表。')
+  if (disposed) return
+  current.value = conversation; activeId.value = conversation?.id ?? ''
+  input.value = ''; notice.value = ''; omitted.value = 0
   followBottom.value = true
   void scrollBottom()
 }
+async function selectConversation(conversation: ConversationSummary) {
+  if (loading.value || deleting.value || disposed || activeId.value === conversation.id) return
+  stop(); loading.value = true
+  try {
+    await chatWrites.flush()
+    if (disposed) return
+    if (current.value && storageFailed.value) { notice.value = '请先重试保存当前对话，再切换会话。'; return }
+    await loadActive(conversation)
+  } catch (error) { notice.value = error instanceof Error ? error.message : '会话读取失败，请重试。' }
+  finally { loading.value = false }
+}
 async function removeCurrent() {
   const conversation = current.value
-  if (!conversation || !confirm('删除此对话及其聊天记录？')) return
-  stop()
-  await writes
+  if (loading.value || deleting.value || disposed || !conversation || !confirm('删除此对话及其聊天记录？')) return
+  deleting.value = true; stop()
   try {
-    await deleteConversation(conversation.id)
+    await chatWrites.mutate(() => deleteConversation(conversation.id))
+    if (disposed) return
     conversations.value = conversations.value.filter(item => item.id !== conversation.id)
-    activeId.value = conversations.value[0]?.id ?? ''
-    input.value = ''; notice.value = ''; omitted.value = 0
-    if (!current.value) newConversation()
+    current.value = undefined; activeId.value = ''; input.value = ''; omitted.value = 0
+    storageFailed.value = false; storageStatus.value = '对话已删除。'
+    if (conversations.value[0]) {
+      try { await loadActive(conversations.value[0]) }
+      catch { notice.value = '对话已删除，下一条会话读取失败，请点击历史会话重试。' }
+    } else createConversation()
   } catch { storageFailed.value = true; storageStatus.value = '删除失败，聊天记录仍保留，请重试。' }
+  finally { deleting.value = false }
 }
 async function clearAll() {
-  if (!confirm('清空此网站在当前浏览器保存的全部聊天记录？AI 配置会保留。')) return
-  stop(); await writes
+  if (loading.value || deleting.value || disposed || !confirm('清空此网站在当前浏览器保存的全部聊天记录？AI 配置会保留。')) return
+  deleting.value = true; stop()
   try {
-    await clearConversations()
-    conversations.value = []; activeId.value = ''; newConversation()
+    await chatWrites.mutate(clearConversations)
+    if (disposed) return
+    conversations.value = []; activeId.value = ''; current.value = undefined
+    storageFailed.value = false; createConversation()
   } catch { storageFailed.value = true; storageStatus.value = '清空失败，聊天记录仍保留，请重试。' }
+  finally { deleting.value = false }
 }
 async function scrollBottom() {
   await nextTick()
@@ -109,9 +143,9 @@ function onScroll() {
   if (el) followBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80
 }
 async function send() {
-  if (busy.value || loading.value || !configured.value || !input.value.trim()) return
+  if (busy.value || loading.value || deleting.value || disposed || !configured.value || !input.value.trim()) return
   const text = input.value
-  if (!current.value) newConversation()
+  if (!current.value) createConversation()
   const conversation = current.value!
   let context: ReturnType<typeof buildContext>
   try { context = buildContext(conversation.messages, text) }
@@ -173,10 +207,12 @@ watch(() => [aiSettings.baseUrl, aiSettings.model], () => {
 onMounted(async () => {
   window.addEventListener('pagehide', stop)
   try {
+    await chatWrites.flush()
+    if (disposed) return
     const restored = await loadConversations()
     if (disposed) return
     conversations.value = restored
-    activeId.value = restored[0]?.id ?? ''
+    await loadActive(restored[0])
     storageStatus.value = '聊天记录已保存在此浏览器'
   } catch {
     storageFailed.value = true; storageStatus.value = '无法读取本地会话，本次可聊天，刷新后可能丢失。'
@@ -192,15 +228,15 @@ onBeforeUnmount(() => { window.removeEventListener('pagehide', stop); disposed =
     <div class="tool-heading"><div><div class="eyebrow">AI 工具 <span>/</span> LOCAL CHAT</div><h1>本地 AI 聊天</h1><p>和自己的 Ollama 多轮对话，聊天记录自动保存在当前浏览器。</p></div><div class="heading-icon"><MessageCircle :size="32" /></div></div>
     <div class="chat-workspace">
       <aside class="chat-sidebar" aria-label="历史会话">
-        <button class="button primary" :disabled="loading" @click="newConversation"><Plus :size="15" />新建对话</button>
+        <button class="button primary" :disabled="loading || deleting" @click="newConversation"><Plus :size="15" />新建对话</button>
         <div class="chat-history">
           <p v-if="loading">正在读取会话…</p><p v-else-if="!ordered.length">还没有会话，发送消息即可开始。</p>
-          <button v-for="conversation in ordered" :key="conversation.id" class="chat-session" :class="{ active: activeId === conversation.id }" :aria-pressed="activeId === conversation.id" @click="selectConversation(conversation)"><span>{{ conversation.title }}</span><small>{{ new Date(conversation.updatedAt).toLocaleString() }}</small></button>
+          <button v-for="conversation in ordered" :key="conversation.id" class="chat-session" :disabled="loading || deleting" :class="{ active: activeId === conversation.id }" :aria-pressed="activeId === conversation.id" @click="selectConversation(conversation)"><span>{{ conversation.title }}</span><small>{{ new Date(conversation.updatedAt).toLocaleString() }}</small></button>
         </div>
-        <button class="button" :disabled="loading || busy || !ordered.length" @click="clearAll"><Trash2 :size="13" />清空全部聊天</button>
+        <button class="button" :disabled="loading || deleting || busy || !ordered.length" @click="clearAll"><Trash2 :size="13" />清空全部聊天</button>
       </aside>
       <section class="chat-main" aria-label="聊天">
-        <header class="chat-toolbar"><div><strong>{{ aiSettings.model || '尚未配置 Ollama' }}</strong><small>{{ configured ? connection : '请先配置服务和本地模型' }}</small></div><div class="chat-toolbar-actions"><button class="button" @click="openAiSettings"><Settings :size="14" />AI 设置</button><button class="button" :disabled="loading || busy || !current" @click="removeCurrent" aria-label="删除当前对话"><Trash2 :size="14" /></button></div></header>
+        <header class="chat-toolbar"><div><strong>{{ aiSettings.model || '尚未配置 Ollama' }}</strong><small>{{ configured ? connection : '请先配置服务和本地模型' }}</small></div><div class="chat-toolbar-actions"><button class="button" @click="openAiSettings"><Settings :size="14" />AI 设置</button><button class="button" :disabled="loading || deleting || busy || !current" @click="removeCurrent" aria-label="删除当前对话"><Trash2 :size="14" /></button></div></header>
         <div v-if="!configured" class="chat-config-hint"><p>配置 Ollama 后即可开始纯文字多轮对话。</p><button class="button primary" @click="openAiSettings">配置 Ollama</button></div>
         <div ref="messageList" class="chat-messages" @scroll="onScroll">
           <div v-if="!current?.messages.length" class="chat-empty"><MessageCircle :size="35" /><h2>从一个问题开始</h2><p>支持解释代码、讨论方案和接着追问。<br />消息只发送到你配置的 Ollama 服务。</p></div>
@@ -218,13 +254,14 @@ onBeforeUnmount(() => { window.removeEventListener('pagehide', stop); disposed =
             <p id="chat-thinking-help">默认关闭，开启可能更慢；需模型支持。GPT-OSS 等模型不能通过此开关完全关闭思考。</p>
           </div>
           <label for="chat-input" class="chat-input-label">发送消息</label>
-          <textarea id="chat-input" v-model="input" :disabled="loading || !configured" :maxlength="MAX_INPUT_CHARS" rows="3" placeholder="输入消息，接着聊下去…" @keydown="keydown"></textarea>
-          <div class="chat-send-row"><span>Enter 发送 · Shift+Enter 换行 <small>{{ input.length }}/{{ MAX_INPUT_CHARS }}</small></span><button v-if="busy" class="button" @click="stop"><Square :size="13" />停止生成</button><button v-else class="button primary" :disabled="loading || !configured || !input.trim()" @click="send"><Send :size="14" />发送</button></div>
+          <textarea id="chat-input" v-model="input" :disabled="loading || deleting || !configured" :maxlength="MAX_INPUT_CHARS" rows="3" placeholder="输入消息，接着聊下去…" @keydown="keydown"></textarea>
+          <div class="chat-send-row"><span>Enter 发送 · Shift+Enter 换行 <small>{{ input.length }}/{{ MAX_INPUT_CHARS }}</small></span><button v-if="busy" class="button" @click="stop"><Square :size="13" />停止生成</button><button v-else class="button primary" :disabled="loading || deleting || !configured || !input.trim()" @click="send"><Send :size="14" />发送</button></div>
         </div>
       </section>
     </div>
+    <p v-if="deleting" class="chat-notice" role="status">正在删除聊天记录…</p>
     <p v-if="notice" class="chat-notice" role="status">{{ notice }}</p>
-    <p class="chat-storage" :class="{ 'limit-error': storageFailed }" role="status">{{ storageStatus }}<button v-if="storageFailed && current" class="button" @click="persist(current)">重试保存</button></p>
+    <p class="chat-storage" :class="{ 'limit-error': storageFailed }" role="status">{{ storageStatus }}<button v-if="storageFailed && current" class="button" :disabled="loading || deleting" @click="persist(current)">重试保存</button></p>
     <p v-if="settingsWarning" class="limit-error" role="status">{{ settingsWarning }}</p>
     <p v-if="aiSettingsWarning" class="limit-error">{{ aiSettingsWarning }}</p>
     <details class="usage-details"><summary>关于上下文与本地保存</summary><div><p>配置由全站 AI 设置统一维护。聊天记录保存在此网站的浏览器数据库中，不跨设备同步；清除网站数据会删除记录。切换对话或离开页面会停止生成，已收到内容保留。</p><p>仅发送近期完整的问答轮次；失败、停止或刷新中断的轮次不参与后续上下文。字符上限不是模型的 token 上限，模型仍可能受自身上下文窗口限制。</p><p>当前只支持纯文字，回复按原始文本展示，可复制代码和 Markdown。Thinking 可在输入框上方切换，默认关闭并保存选择；部分模型仍可能思考，思考内容不展示。服务端日志和推理位置由你的 Ollama 服务决定。</p></div></details>

@@ -50,6 +50,10 @@ error_page 404 /404.html;
 - Vite 开发/preview 的 SPA 回退不能代替生产服务器 404 验收。生产规则应实测，不根据本地开发响应判断。
 - 没有新增 Service Worker、埋点或数据上传。AI 工具仍受实际服务的 HTTPS、跨域和浏览器安全策略约束。
 
+## 照片水印边框与 RAW
+
+照片水印边框的上线要求、实测样本和限制见 [PHOTO_FRAME.md](PHOTO_FRAME.md)。RAW 需要 HTTPS、安全上下文和 COOP/COEP 响应头；仅上传页面与 WASM 文件不够。
+
 ## 上线验收
 
 1. 直接访问首页及几个工具网址，并刷新；标题与工具应对应，JS、CSS、Worker、WASM 不出现 404。

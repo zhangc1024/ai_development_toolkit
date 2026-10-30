@@ -79,6 +79,7 @@ add_header Cross-Origin-Embedder-Policy "require-corp" always;
 
 必须部署完整 dist，包括 vendor/libraw/libraw.js、libraw.wasm、libraw.js.map。
 没有响应头时，HEIC 与通用格式仍可使用，RAW 会给出配置提示，不静默返回缩略图。
+尼康 HE/HE★ NEF 在当前 WASM 中可能返回彩色条纹而不抛错，现已在完整 MakerNote 检测后提前拒绝原始像素解码。图片压缩工具提示先用 Nikon NX Studio 转换；照片水印边框可显式使用内嵌相机 JPEG，并显示其真实分辨率，见 PHOTO_FRAME.md。
 跨源隔离可能影响外部嵌入或跨窗口交互；本工具资源同源。用户配置的 Ollama 请求仍需目标服务允许 CORS。
 RAW 峰值内存可达数百 MiB 以上，手机大图可能失败或触发 60 秒超时；不自动降低分辨率。64 MP 边界也应用于 RAW 传感器尺寸（包括边缘像素）。
 
