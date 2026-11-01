@@ -10,6 +10,7 @@ export const tools: ToolDefinition[] = [
   { id: 'markdown-params', name: 'Markdown 参数转换器', description: 'Markdown 参数表转换为 JSON、PHP、JavaScript、Python', category: '数据处理', status: 'ready', component: defineAsyncComponent(() => import('./markdown-params/MarkdownParamsTool.vue')) },
   { id: 'ai-chat', name: '本地 AI 聊天', description: '连接 Ollama，多轮对话与本地会话保存', category: 'AI 工具', status: 'ready', component: defineAsyncComponent(() => import('./chat/ChatTool.vue')) },
   { id: 'prompt', name: '提示词优化', description: '整理需求，生成结构化提示词', category: 'AI 工具', status: 'ready', component: defineAsyncComponent(() => import('./prompt/PromptTool.vue')) },
+  { id: 'double-exposure', name: '双重曝光', description: '将风景融入人像轮廓，调整渐变与色调，本地高清导出', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./double-exposure/DoubleExposureTool.vue')) },
   { id: 'photo-frame', name: '照片水印边框', description: '品牌 LOGO、拍摄参数与虚化边框，支持 HEIC/RAW，本地高清导出', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./photo-frame/PhotoFrameTool.vue')) },
   { id: 'watermark', name: '图片加水印', description: '添加文字水印，调整位置与透明度', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./watermark/WatermarkTool.vue')) },
   { id: 'image-compress', name: '图片压缩 / 格式转换', description: '压缩图片，导入 HEIC/RAW，导出 JPG、PNG、WebP 等', category: '图片工具', status: 'ready', component: defineAsyncComponent(() => import('./images/ImageCompressTool.vue')) },
