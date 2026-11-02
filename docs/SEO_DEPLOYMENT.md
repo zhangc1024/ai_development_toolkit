@@ -29,20 +29,30 @@ server_name tools.zhangc.net;
 root /实际发布目录/dist;
 index index.html;
 
+# RAW 解码需要页面及 Worker 均启用跨源隔离。
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Cross-Origin-Embedder-Policy "require-corp" always;
+
 location / {
     try_files $uri $uri/ =404;
 }
 location /assets/ {
     try_files $uri =404;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Embedder-Policy "require-corp" always;
     add_header Cache-Control "public, max-age=31536000, immutable";
 }
 location ~ \.html$ {
     try_files $uri =404;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Embedder-Policy "require-corp" always;
     add_header Cache-Control "no-cache";
 }
 error_page 404 /404.html;
 ```
 
+- 默认情况下，子 location 定义任何 add_header 后不再继承上层 add_header，因此 HTML 和 assets 的缓存规则中也需要保留隔离头。实际配置若还有 JS/WASM 正则 location，也应逐项核对；已有安全响应头同样需要保留。参见 https://nginx.org/en/docs/http/ngx_http_headers_module.html 。
+- RAW 验收：HTTPS 页面控制台 crossOriginIsolated 必须为 true，并核查实际 Worker 响应含 Cross-Origin-Embedder-Policy: require-corp。更新配置后重新打开页面；若有 CDN，刷新对应缓存。
 - 不要把所有未知路径回退到首页，否则不存在的网址可能返回 200（soft 404）。
 - 确保 HTML/JS/CSS/WASM 返回正确 MIME，服务器启用标准 mime.types。
 - HTML 短缓存或重新验证；带哈希资源长缓存。发布时先上传新资源，再替换 HTML，并保留旧哈希资源一段时间。
@@ -50,7 +60,9 @@ error_page 404 /404.html;
 - Vite 开发/preview 的 SPA 回退不能代替生产服务器 404 验收。生产规则应实测，不根据本地开发响应判断。
 - 没有新增 Service Worker、埋点或数据上传。AI 工具仍受实际服务的 HTTPS、跨域和浏览器安全策略约束。
 
-## 照片水印边框与 RAW
+## 图片加水印、照片水印边框与 RAW
+
+图片加水印自 0.1.8 起在 Web 与桌面共用 HEIC/HEIF、NEF 导入能力，验证和限制见 [WATERMARK.md](WATERMARK.md)。HEIC 不依赖跨源隔离；NEF 仍需要以下 RAW 部署条件。网页功能已生成到 dist，需部署完整构建才能在线生效。
 
 照片水印边框的上线要求、实测样本和限制见 [PHOTO_FRAME.md](PHOTO_FRAME.md)。RAW 需要 HTTPS、安全上下文和 COOP/COEP 响应头；仅上传页面与 WASM 文件不够。
 

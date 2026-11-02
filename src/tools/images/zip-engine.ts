@@ -87,10 +87,15 @@ export async function processZip(file: Blob, level: CompressionLevel, target: Ta
             if (['png', 'jpg', 'webp'].includes(inputFormat)) inspectImage(original, true)
             notify('image')
             const result = await processImage(original.slice().buffer, level, target, row.path)
-            output = new Uint8Array(result.buffer)
-            if (!result.keptOriginal && (target !== 'original' || result.format !== inputFormat)) outputPath = nameFor(row.path, result.format)
-            row.status = result.keptOriginal ? 'kept' : 'processed'
-            row.reason = result.notes.join('；') || (result.keptOriginal ? '保留原图' : '处理完成')
+            if (target === 'original' && result.buffer.byteLength >= actual) {
+              row.status = 'kept'
+              row.reason = '本次处理未减小体积，已保留原文件（包括原格式及元数据）；如需转换，请主动选择目标格式。'
+            } else {
+              output = new Uint8Array(result.buffer)
+              if (!result.keptOriginal && (target !== 'original' || result.format !== inputFormat)) outputPath = nameFor(row.path, result.format)
+              row.status = result.keptOriginal ? 'kept' : 'processed'
+              row.reason = result.notes.join('；') || (result.keptOriginal ? '保留原图' : '处理完成')
+            }
           } catch (e) {
             const reason = e instanceof Error ? e.message : String(e)
             const unsupported = /暂不支持 (?:APNG|动态 WebP)|不支持 GIF 或动画/.test(reason)

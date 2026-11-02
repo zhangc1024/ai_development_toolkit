@@ -24,7 +24,7 @@ describe('compression input boundaries', () => {
     for (const name of ['acTL','fcTL','fdAT']) expect(() => inspectImage(png(10,20,chunk(name)))).toThrow(/动画/)
   })
   it('rejects oversized or zero dimensions', () => {
-    for (const [w,h] of [[0,1],[16385,1],[4001,4000]]) expect(() => inspectImage(png(w,h))).toThrow(/尺寸/)
+    for (const [w,h] of [[0,1],[16385,1],[8001,8000]]) expect(() => inspectImage(png(w,h))).toThrow(/尺寸/)
   })
   it('rejects truncated and forged chunks', () => {
     expect(() => inspectImage(png().subarray(0,32))).toThrow()

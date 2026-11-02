@@ -35,11 +35,14 @@ describe('photo input formats and limits', () => {
     expect(() => validatePhotoDimensions(8000,6000)).not.toThrow()
     for (const [w,h] of [[0,1],[-1,1],[NaN,1],[1.5,2],[16385,1],[9000,8000]]) expect(() => validatePhotoDimensions(w,h)).toThrow()
   })
-  it('photo mode allows 48 MP PNG while legacy tools retain 16 MP boundary', () => {
+  it('image and photo tools share the 64 MP PNG boundary', () => {
     const bytes=new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64'))
     const view=new DataView(bytes.buffer); view.setUint32(16,8000); view.setUint32(20,6000)
     expect(inspectImage(bytes,true).width).toBe(8000)
-    expect(() => inspectImage(bytes)).toThrow(/尺寸/)
+    expect(inspectImage(bytes).width).toBe(8000)
+    view.setUint32(16,8001); view.setUint32(20,8000)
+    expect(() => inspectImage(bytes)).toThrow(/6400/)
+    expect(() => inspectImage(bytes,true)).toThrow(/6400/)
   })
 })
 describe('BMP export bytes', () => {

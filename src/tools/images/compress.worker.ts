@@ -10,15 +10,15 @@ import webpWasm from '@jsquash/webp/codec/enc/webp_enc.wasm?url'
 import webpSimdWasm from '@jsquash/webp/codec/enc/webp_enc_simd.wasm?url'
 import oxiWasm from '@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm?url'
 
-self.onmessage = async ({ data }: MessageEvent<{ action: 'inspect' | 'compress'; buffer: ArrayBuffer; level: CompressionLevel; target: TargetFormat; name?: string }>) => {
+self.onmessage = async ({ data }: MessageEvent<{ action: 'inspect' | 'compress'; buffer: ArrayBuffer; level: CompressionLevel; target: TargetFormat; name?: string; allowEmbeddedRawPreview?: boolean }>) => {
   let bitmap: ImageBitmap | undefined
   try {
     const { buffer, level, target, action } = data
-    const info = await decodePhoto(buffer, data.name ?? '')
+    const info = await decodePhoto(buffer, data.name ?? '', { allowEmbeddedRawPreview: data.allowEmbeddedRawPreview })
     bitmap = info.bitmap
     const canEncodeOriginal = Object.hasOwn(MIME, info.format)
-    const format: ImageFormat = target === 'original' ? (canEncodeOriginal ? info.format as ImageFormat : 'png') : target
-    const effectiveTarget = target === 'original' && !canEncodeOriginal ? 'png' : target
+    const format: ImageFormat = target === 'original' ? (info.embeddedPreview ? 'jpg' : canEncodeOriginal ? info.format as ImageFormat : 'png') : target
+    const effectiveTarget = target === 'original' && !canEncodeOriginal ? format : target
     if (!QUALITY[level] || !MIME[format]) throw Error('无效的压缩选项')
     const width = bitmap.width, height = bitmap.height
     if (action === 'inspect') {
@@ -26,14 +26,27 @@ self.onmessage = async ({ data }: MessageEvent<{ action: 'inspect' | 'compress';
       self.postMessage({ width, height, format: info.format, preview, notes: info.notes }); return
     }
     const notes: string[] = [...info.notes]
-    if (effectiveTarget !== target) notes.push('此输入格式暂不支持重新编码，原格式选项自动导出 PNG；原始文件未修改。')
+    if (effectiveTarget !== target) notes.push(info.embeddedPreview ? 'HE/HE★ 兼容模式按相机 JPEG 导出，避免转成大尺寸 PNG；NEF 原始文件未修改。' : '此输入格式暂不支持重新编码，原格式选项自动导出 PNG；原始文件未修改。')
     let encoded: ArrayBuffer
-    if (level === 'preserve' && effectiveTarget === 'original' && info.format !== 'png') {
+    if (target === 'original' && info.embeddedJpeg && level === 'preserve') {
+      encoded = info.embeddedJpeg.buffer
+      notes.push('直接提取相机内嵌 JPEG，未再次编码；不包含 RAW 传感器原始数据。')
+    } else if (level === 'preserve' && effectiveTarget === 'original' && info.format !== 'png') {
       encoded = buffer
       notes.push('保真优先：保留原始文件，避免对已有图片再次有损编码。可选择轻度压缩进一步减小体积。')
     } else {
       const q = QUALITY[level]
-      if (format === 'png') {
+      if (format === 'png' && info.format !== 'png' && width * height >= 8000000) {
+        // Full-photo WASM optimisation plus multiple palette searches can exceed the worker budget.
+        const canvas = new OffscreenCanvas(width, height)
+        const context = canvas.getContext('2d')
+        if (!context) throw Error('当前浏览器不支持本地图片处理')
+        try {
+          context.drawImage(bitmap, 0, 0)
+          encoded = await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer()
+        } finally { canvas.width = canvas.height = 1 }
+        notes.push('大尺寸图片使用快速无损 PNG 编码，跳过耗时的颜色量化；如需更小体积，请选择 JPG/WebP。')
+      } else if (format === 'png') {
         const oxi = await import('@jsquash/oxipng/codec/pkg/squoosh_oxipng.js')
         await oxi.default(oxiWasm)
         // Original PNG optimisation keeps its color profile and avoids an 8-bit canvas round-trip.

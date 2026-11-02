@@ -1,4 +1,15 @@
 <script setup lang="ts">
+import FolderBatch from '../../platform/FolderBatch.vue'
+import { frameProcessor } from './batch'
+const batchMode = ref(false), batchRunning = ref(false), batchAutomaticLogo = ref(true), batchOverrideMetadata = ref(false)
+const windowDesktop = !!window.desktopBatch
+async function prepareBatch() {
+  const settings = { style: { ...style }, visible: { ...visible }, edge: edge.value, format: format.value, shooting: batchOverrideMetadata.value ? { ...shooting } : undefined, automaticLogo: batchAutomaticLogo.value, nikonVariant: nikonVariant.value }
+  const fixed = !settings.automaticLogo && logo.value ? { ...logo.value, image: await createImageBitmap(logo.value.image as ImageBitmapSource) } : undefined
+  return { process: frameProcessor({ ...settings, fixedLogo: fixed }), dispose: () => fixed?.image.close() }
+}
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; notice.value = text } })
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { ImagePlus, Download, RotateCcw, Camera, ShieldCheck } from '@lucide/vue'
 import { MAX_PHOTO_BYTES, RAW_EXTENSIONS } from '../images/photo-formats'
@@ -29,7 +40,7 @@ let worker: Worker | undefined, timer: ReturnType<typeof setTimeout> | undefined
 const urls = new Set<string>()
 const message = (e: unknown) => e instanceof Error ? e.message : '处理失败，请重试'
 function stop() { worker?.terminate(); worker = undefined; clearTimeout(timer); timer = undefined }
-function cancel() { revision++; stop(); busy.value = false; phase.value = ''; notice.value = '已取消。' }
+function cancel() { cancelSave(); revision++; stop(); busy.value = false; phase.value = ''; notice.value = '已取消。' }
 function clearPhoto() { cancel(); source.value?.close(); source.value = undefined; name.value = ''; notes.value = []; Object.assign(shooting, emptyShooting()); error.value = ''; notice.value = '' }
 function selectTemplate(template: Template) {
   Object.assign(style, defaults(template))
@@ -44,6 +55,7 @@ function startWorker(task: Worker, version: number) {
   return task
 }
 async function load(file: File) {
+  if (batchRunning.value) return
   cancel(); error.value = ''; notice.value = ''; previewError.value = ''
   const version = revision
   busy.value = true; phase.value = '正在读取照片与拍摄信息…'
@@ -132,16 +144,15 @@ async function download() {
     if (selectedLogo) logoBitmap = await createImageBitmap(selectedLogo.image as ImageBitmapSource)
     if (version !== revision || disposed) { photo.close(); logoBitmap?.close(); return }
     const task = startWorker(new Worker(new URL('./export.worker.ts', import.meta.url), { type: 'module' }), version)
-    task.onmessage = ({ data }) => {
+    task.onmessage = async ({ data }) => {
       if (version !== revision || disposed) return
-      stop(); busy.value = false; phase.value = ''
-      if (data.error) { error.value = data.error; return }
-      const blob: Blob = data.blob, url = URL.createObjectURL(blob); urls.add(url)
-      const a = document.createElement('a'); a.href = url
-      a.download = name.value.replace(/\.[^.]+$/, '') + '-水印边框.' + (blob.type === 'image/jpeg' ? 'jpg' : 'png')
-      document.body.appendChild(a); a.click(); a.remove()
-      setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url) }, 60000)
-      notice.value = blob.type === output ? '图片已生成，已开始下载。' : '所选格式不可用，已导出 PNG。'
+      stop()
+      if (data.error) { busy.value = false; phase.value = ''; error.value = data.error; return }
+      const blob: Blob = data.blob
+      phase.value = '正在保存图片…'
+      try { await save(blob, name.value.replace(/\.[^.]+$/, '') + '-水印边框.' + (blob.type === 'image/jpeg' ? 'jpg' : 'png'), () => !disposed && version === revision) }
+      finally { if (!disposed && version === revision) { busy.value = false; phase.value = '' } }
+
     }
     const exportedLogo = selectedLogo && logoBitmap ? { ...selectedLogo, image: logoBitmap } : undefined
     task.postMessage({ photo, logo: exportedLogo, geometry: g, style: settings, shooting: data, visible: show, format: output }, logoBitmap ? [photo, logoBitmap] : [photo])
@@ -156,7 +167,10 @@ onBeforeUnmount(() => { disposed = true; revision++; logoRevision++; customRevis
 
 <template>
   <div class="tool-page frame-tool">
-    <div class="tool-heading"><div><h1>照片水印边框</h1><p>为照片添上品牌标识与拍摄故事，生成属于你的摄影作品。</p></div><span class="local-badge"><ShieldCheck :size="15" />本地处理 · 不上传</span></div>
+    <FolderBatch title="照片水印边框" :extensions="accept.split(',').map(value => value.slice(1))" :max-bytes="MAX_PHOTO_BYTES" :prepare="prepareBatch" :disabled="busy || saving || logoBusy || !!logoError" hint="沿用下方模板与导出设置，默认每张照片分别读取拍摄参数和品牌；空白参数自动隐藏。" @mode="batchMode = $event" @running="batchRunning = $event" @preview="load" />
+    <div :inert="batchRunning || undefined">
+    <div v-if="windowDesktop && batchMode" class="help"><label><input v-model="batchAutomaticLogo" type="checkbox" />批量逐张识别品牌 LOGO（关闭则统一使用当前 LOGO）</label><br /><label><input v-model="batchOverrideMetadata" type="checkbox" />批量统一覆盖拍摄信息：使用下方全部字段（默认关闭）</label></div>
+    <div v-if="!windowDesktop" class="tool-heading"><div><h1>照片水印边框</h1><p>为照片添上品牌标识与拍摄故事，生成属于你的摄影作品。</p></div><span class="local-badge"><ShieldCheck :size="15" />本地处理 · 不上传</span></div>
     <div class="frame-workspace">
       <section class="frame-controls">
         <div class="section-head"><h2>1. 添加照片</h2><button class="text-action" :disabled="busy || !source" @click="clearPhoto">清空</button></div>
@@ -190,7 +204,7 @@ onBeforeUnmount(() => { disposed = true; revision++; logoRevision++; customRevis
         </div>
         <div class="export-panel">
           <div class="export-settings"><label>导出尺寸<select v-model="edge" :disabled="busy" aria-label="导出尺寸"><option :value="2048">长边 2048 px</option><option :value="4096">长边 4096 px（默认）</option><option value="original">原尺寸级输出</option></select></label><label>图片格式<select v-model="format" :disabled="busy" aria-label="图片格式"><option value="image/jpeg">JPG · 质量 95%</option><option value="image/png">PNG</option></select></label></div>
-          <button class="button primary full export-button" :disabled="!source || !geometry.value || busy || logoBusy || !!logoError || !!previewError" @click="download"><Download :size="17" />导出照片</button>
+          <button class="button primary full export-button" :disabled="saving || !source || !geometry.value || busy || logoBusy || !!logoError || !!previewError" @click="download"><Download :size="17" />导出照片</button>
           <div v-if="busy" class="processing" role="status"><span>{{ phase }}</span><button class="text-action" @click="cancel">取消处理</button></div>
           <p v-if="error || geometry.error || previewError" class="error" role="alert">{{ error || geometry.error || previewError }}</p>
           <p v-if="notice" class="notice" role="status">{{ notice }}</p>
@@ -201,6 +215,7 @@ onBeforeUnmount(() => { disposed = true; revision++; logoRevision++; customRevis
       </section>
     </div>
   </div>
+    </div>
 </template>
 
 <style scoped>

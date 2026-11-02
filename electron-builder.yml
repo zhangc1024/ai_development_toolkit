@@ -1,0 +1,30 @@
+appId: local.devkit.images
+productName: DevKit 图片工具
+artifactName: DevKit-Images-${version}-win-x64-portable.${ext}
+directories:
+  output: release
+asar: true
+npmRebuild: false
+files:
+  - electron/main.cjs
+  - electron/preload.cjs
+  - electron/protocol.cjs
+  - electron/files.cjs
+  - electron/batch.cjs
+  - dist-desktop/**/*
+  - package.json
+  - "!node_modules/**/*"
+win:
+  target: zip
+  icon: build/icon.ico
+  executableName: DevKitImages
+  signExecutable: false
+publish: null
+nsis:
+  artifactName: DevKit-Images-${version}-win-x64.${ext}
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  runAfterFinish: false
+  deleteAppDataOnUninstall: false

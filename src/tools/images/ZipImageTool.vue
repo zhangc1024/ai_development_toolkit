@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; phase.value = text } })
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { TIMEOUT_MS, type CompressionLevel, type TargetFormat } from './compression'
 import type { ZipRow } from './zip-policy'
 const props = defineProps<{ file: File; level: CompressionLevel; target: TargetFormat }>()
+const allowEmbeddedRawPreview = ref(true)
 const rows = ref<ZipRow[]>([]), expanded = ref(0), scanned = ref(false), busy = ref(false)
 const phase = ref(''), error = ref(''), done = ref(0), total = ref(0)
 const result = ref<{ url: string; size: number; imageBefore: number; imageAfter: number }>()
@@ -22,7 +25,7 @@ function difference(before: number, after: number) {
 }
 function stop() { archive?.terminate(); image?.terminate(); archive = image = undefined; activeImageId = 0; clearTimeout(timer); clearTimeout(imageTimer); busy.value = false }
 function dropResult() { if (result.value) URL.revokeObjectURL(result.value.url); result.value = undefined }
-function resetRun() {
+function resetRun() { cancelSave();
   revision++; stop(); dropResult(); error.value = ''; phase.value = ''; done.value = 0
   rows.value = rows.value.map(r => ({ path: r.path, size: r.size, directory: r.directory, image: r.image, status: 'pending', reason: r.directory ? '文件夹' : '等待处理' }))
 }
@@ -64,7 +67,7 @@ function launch(action: 'scan' | 'run') {
           image.onerror = () => finish({ error: '图片编码器运行失败' })
           image.onmessageerror = () => finish({ error: '图片结果读取失败' })
           imageTimer = setTimeout(() => finish({ error: '图片处理超过 60 秒' }), TIMEOUT_MS)
-          image.postMessage({ action: 'compress', buffer: data.buffer, level: data.level, target: data.target, name: data.name }, [data.buffer])
+          image.postMessage({ action: 'compress', buffer: data.buffer, level: data.level, target: data.target, name: data.name, allowEmbeddedRawPreview: allowEmbeddedRawPreview.value }, [data.buffer])
         } catch (e) { finish({ error: e instanceof Error ? e.message : '无法启动图片处理' }) }
       } else if (data.type === 'done') {
         rows.value = data.rows; done.value = data.rows.length
@@ -77,13 +80,14 @@ function launch(action: 'scan' | 'run') {
     worker.postMessage({ type: action, file: props.file, level: props.level, target: props.target })
   } catch (e) { fail(e instanceof Error ? e.message : '无法启动 ZIP 处理') }
 }
-function download() {
-  if (!result.value) return
-  const a = document.createElement('a'); a.href = result.value.url
-  a.download = (props.file.name.replace(/\.zip$/i, '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_') || 'images') + '-processed.zip'; a.click()
+async function download() {
+  const data = result.value, token = revision
+  if (!data) return
+  const name = (props.file.name.replace(/\.zip$/i, '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_') || 'images') + '-processed.zip'
+  await saveUrl(data.url, name, () => token === revision && result.value === data)
 }
 watch(() => props.file, () => { scanned.value = false; rows.value = []; expanded.value = 0; total.value = 0; launch('scan') }, { immediate: true })
-watch(() => [props.level, props.target], () => {
+watch(() => [props.level, props.target, allowEmbeddedRawPreview.value], () => {
   const wasScanning = busy.value && !scanned.value
   if (wasScanning) launch('scan')
   else { resetRun(); phase.value = scanned.value ? '选项已更新，请重新开始。' : '请重新扫描 ZIP。' }
@@ -96,11 +100,13 @@ onBeforeUnmount(() => { revision++; stop(); dropResult() })
       <button v-if="!scanned" class="button" :disabled="busy" @click="launch('scan')">重新扫描 ZIP</button>
       <button class="button primary" :disabled="!scanned || busy" @click="launch('run')">开始处理 ZIP</button>
       <button v-if="busy" class="button" @click="cancel">取消 ZIP 处理</button>
-      <button v-if="result" class="button" @click="download">下载结果 ZIP</button>
+      <button v-if="result" class="button" :disabled="saving" @click="download">下载结果 ZIP</button>
     </div></header>
     <p class="zip-name">{{ file.name }} · 输入 {{ size(file.size) }} · {{ rows.length }} 个条目 · 声明解压大小 {{ size(expanded) }}</p>
-    <p>转换格式会更改扩展名（HEIC/RAW 选择原格式也会转为 PNG），HTML/CSS 等文件里的图片引用不会自动修改；重名会自动加序号。</p>
+    <p>转换格式会更改扩展名；原格式模式下 HE/HE★ 内嵌 JPEG 按 JPG 输出，其他 HEIC/RAW 尝试转为 PNG，仅在文件变小时采用，否则保留原件，HTML/CSS 等文件里的图片引用不会自动修改；重名会自动加序号。</p>
     <p>保留目录结构、非图片文件和不支持的图片；图片处理失败保留原文件。内部压缩包不递归解压。RAR、加密包和分卷包暂不支持。</p>
+    <label><input v-model="allowEmbeddedRawPreview" type="checkbox" /> 尼康 HE/HE★ 兼容：使用相机内嵌 JPEG（非 RAW 原始像素）</label>
+    <p>默认启用：普通 RAW 仍完整解码；尼康高效率 HE/HE★ NEF 自动使用内嵌 JPEG。兼容输出来自相机 JPEG，尺寸可能小于 RAW；没有有效内嵌 JPEG 时仍保留原文件。需要 JPG 文件时，请将目标格式设为 JPG。</p>
     <p class="zip-status" :class="{ error: !!error }" role="status">{{ error || phase }}</p>
     <div v-if="busy || result"><progress :value="done" :max="total || 1" aria-label="ZIP 处理进度"></progress> {{ done }} / {{ total }} 个条目</div>
     <div v-if="result" class="zip-summary">

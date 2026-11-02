@@ -13,8 +13,10 @@ describe('image byte conversion',()=>{
  it('unknown bytes rejected',()=>expect(()=>imageType(new Uint8Array([1,2,3]))).toThrow())
  it('byte limit',()=>expect(()=>imageType(new Uint8Array(MAX_IMAGE_BYTES+1))).toThrow('10 MiB'))
  it('text limit',()=>expect(()=>decodeImageBase64('a'.repeat(MAX_BASE64_CHARS+1))).toThrow('15 MiB'))
+ it('accepts 25 MP camera photos',()=>expect(()=>validateDimensions(5000,5000)).not.toThrow())
+ it('accepts exactly 64 MP',()=>expect(()=>validateDimensions(8000,8000)).not.toThrow())
  it('dimensions valid',()=>expect(()=>validateDimensions(4000,4000)).not.toThrow())
- for(const [w,h] of [[0,1],[4001,4000],[16385,1]])it('dimensions '+w+'x'+h,()=>expect(()=>validateDimensions(w!,h!)).toThrow())
+ for(const [w,h] of [[0,1],[-1,1],[NaN,1],[1.5,2],[8001,8000],[16385,1]])it('dimensions '+w+'x'+h,()=>expect(()=>validateDimensions(w!,h!)).toThrow())
 })
 function raster(text:string,invert=false){
  const qr=QRCode.create(text,{errorCorrectionLevel:'M'});const scale=6,width=(qr.modules.size+8)*scale

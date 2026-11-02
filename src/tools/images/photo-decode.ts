@@ -1,7 +1,7 @@
 import { inspectImage } from './compression'
 import { detectPhoto, RAW_EXTENSIONS, validatePhotoDimensions, type RawFormat } from './photo-formats'
 import type { Metadata, RawImageData } from 'libraw-wasm'
-import { decodeEmbeddedJpeg, nikonHighEfficiency } from './raw-preview'
+import { decodeEmbeddedJpeg, embeddedOrientation, nikonHighEfficiency } from './raw-preview'
 
 export async function decodePhoto(buffer: ArrayBuffer, name: string, options: { allowEmbeddedRawPreview?: boolean } = {}) {
   const format = detectPhoto(new Uint8Array(buffer), name)
@@ -9,6 +9,7 @@ export async function decodePhoto(buffer: ArrayBuffer, name: string, options: { 
   let bitmap: ImageBitmap
   let shooting: Metadata | undefined
   let embeddedPreview = false
+  let embeddedJpeg: Uint8Array<ArrayBuffer> | undefined
   if (RAW_EXTENSIONS.includes(format as RawFormat)) {
     if (!globalThis.crossOriginIsolated) throw Error('RAW 解码需要站点开启跨源隔离（COOP/COEP）；请联系站点管理员按部署说明配置，或先用相机软件导出 TIFF/JPG。')
     const url = new URL('/vendor/libraw/libraw.js', self.location.origin).href
@@ -25,10 +26,16 @@ export async function decodePhoto(buffer: ArrayBuffer, name: string, options: { 
       const highEfficiency = nikonHighEfficiency(metadata)
       if (highEfficiency) {
         // Do not call imageData(): this WASM build returns colored stripes rather than an error for HE/HE*.
-        if (!options.allowEmbeddedRawPreview) throw Error('此 NEF 使用尼康高效率 ' + highEfficiency + ' 压缩，当前解码器不支持原始像素解码；请使用 Nikon NX Studio 导出 JPG/TIFF，或在照片水印边框工具中使用内嵌 JPEG')
-        bitmap = await decodeEmbeddedJpeg(raw.thumbnailData(), metadata.flip)
+        if (!options.allowEmbeddedRawPreview) throw Error('此 NEF 使用尼康高效率 ' + highEfficiency + ' 压缩，当前解码器不支持原始像素解码；请使用 Nikon NX Studio 导出 JPG/TIFF，或启用内嵌 JPEG 兼容选项（非 RAW 原始像素）')
+        const thumbnail = raw.thumbnailData()
+        bitmap = await decodeEmbeddedJpeg(thumbnail, metadata.flip)
+        const bytes = new Uint8Array(thumbnail.data)
+        const { default: exifr } = await import('exifr')
+        const tags = await exifr.parse(bytes, { pick: ['Orientation'], translateValues: false })
+        // Only pass bytes through when no extra RAW-only orientation transform is needed.
+        if (embeddedOrientation(metadata.flip, tags?.Orientation) === 1) embeddedJpeg = bytes
         embeddedPreview = true
-        notes.push('此 NEF 使用尼康高效率 ' + highEfficiency + ' 压缩，已使用内嵌的相机 JPEG（' + bitmap.width + ' × ' + bitmap.height + '）进行预览和导出；保留拍摄信息，不代表 RAW 原始像素解码。')
+        notes.push('此 NEF 使用尼康高效率 ' + highEfficiency + ' 压缩，已使用内嵌的相机 JPEG（' + bitmap.width + ' × ' + bitmap.height + '）进行预览和导出；不代表 RAW 原始像素解码。')
       } else {
         const image: RawImageData = raw.imageData()
         validatePhotoDimensions(image.width, image.height)
@@ -84,7 +91,7 @@ export async function decodePhoto(buffer: ArrayBuffer, name: string, options: { 
   }
   try { validatePhotoDimensions(bitmap.width, bitmap.height) }
   catch (error) { bitmap.close(); throw error }
-  return { bitmap, format, notes, shooting, embeddedPreview }
+  return { bitmap, format, notes, shooting, embeddedPreview, embeddedJpeg }
 }
 
 export async function previewBlob(bitmap: ImageBitmap) {

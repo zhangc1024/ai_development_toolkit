@@ -3,6 +3,7 @@ import { BlobReader, BlobWriter, Uint8ArrayReader, Uint8ArrayWriter, ZipReader, 
 import { processZip, scanZip, type ZipImageProcessor } from '../src/tools/images/zip-engine'
 import { createZipNamer, safeZipPath, validateZipPaths, ZIP_LIMITS } from '../src/tools/images/zip-policy'
 const text = (s: string) => new TextEncoder().encode(s)
+const heic = new Uint8Array([0,0,0,20,102,116,121,112,104,101,105,99,0,0,0,0,104,101,105,99])
 const png = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64'))
 async function pack(files: { name: string; data?: Uint8Array; options?: ZipWriterAddDataOptions }[]) {
   const writer = new ZipWriter(new BlobWriter(), { useWebWorkers: false, zip64: false })
@@ -36,13 +37,32 @@ describe('ZIP paths and output naming', () => {
 })
 describe('ZIP full engine', () => {
   it('passes RAW names to decoder and renames PNG fallback under original selection without collisions', async () => {
-    const raw=text('raw decoder validates content')
+    const raw=new Uint8Array(200)
     const input=await pack([{name:'camera.NEF',data:raw},{name:'camera.png',data:png}])
     const encoder=vi.fn(async (_buffer: ArrayBuffer, _level: unknown, _target: unknown, name?: string) => ({buffer:png.slice().buffer,format:'png' as const,keptOriginal:false,notes:[name ?? '']}))
     const result=await processZip(input,'preserve','original',encoder,()=>{})
     expect(encoder.mock.calls[0]?.[3]).toBe('camera.NEF')
     expect(result.rows[0].outputPath).toBe('camera-2.png')
     expect((await unpack(result.blob))['camera-2.png']).toEqual(png)
+  })
+
+  it('keeps HEIC and RAW byte-for-byte when original-mode PNG conversion grows', async () => {
+    const raw=text('RAW original bytes')
+    const input=await pack([{name:'phone.HEIC',data:heic},{name:'camera.NEF',data:raw}])
+    const encode: ZipImageProcessor=async()=>({buffer:new ArrayBuffer(300),format:'png',keptOriginal:false,notes:['converted']})
+    const result=await processZip(input,'balanced','original',encode,()=>{})
+    const output=await unpack(result.blob)
+    expect(output['phone.HEIC']).toEqual(heic)
+    expect(output['camera.NEF']).toEqual(raw)
+    expect(result.rows.every(row=>row.status==='kept' && row.reason.includes('未减小体积'))).toBe(true)
+    expect(result.imageAfter).toBe(result.imageBefore)
+  })
+  it('honors explicit format conversion even if the output is larger', async () => {
+    const input=await pack([{name:'phone.HEIC',data:heic}])
+    const result=await processZip(input,'balanced','png',async()=>({buffer:new ArrayBuffer(300),format:'png',keptOriginal:false,notes:[]}),()=>{})
+    expect(result.rows[0].outputPath).toBe('phone.png')
+    expect(result.rows[0].status).toBe('processed')
+    expect((await unpack(result.blob))['phone.png']?.length).toBe(300)
   })
 
   it('preserves folders, unicode, raw files, unsupported images and nested archives byte-for-byte', async () => {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; notice.value = text } })
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { INITIAL_CROP, outputFormat, constrainCrop, cropRect, moveCrop, type Crop } from './core'
 import { drawPreview, exportTiles, packTiles, prepareImage, type Prepared, type Tile } from './images'
@@ -14,7 +16,7 @@ const current = computed(() => results.value[selected.value])
 const lowResolution = computed(() => image.value && cropRect(image.value.width, image.value.height, crop.value).size < 3240)
 let job: AbortController | undefined, disposed = false, frame = 0
 const pointers = new Map<number, { x: number; y: number }>()
-function clearResults() {
+function clearResults() { cancelSave();
   dialog.value?.close()
   for (const item of results.value) { URL.revokeObjectURL(item.url); URL.revokeObjectURL(item.thumb) }
   results.value = []
@@ -85,6 +87,14 @@ async function makeZip() {
   } catch { if (!disposed && !task.signal.aborted) error.value = 'ZIP 打包失败，请重试或逐张保存。' }
   finally { if (!disposed) { busy.value = false; phase.value = '' }; if (job === task) job = undefined }
 }
+async function saveTile(index: number) {
+  const tile = results.value[index]
+  if (tile) await save(tile.blob, tile.name, () => !disposed && results.value[index] === tile)
+}
+async function saveZip() {
+  const url = zipUrl.value
+  if (url) await saveUrl(url, 'moment-grid.zip', () => !disposed && zipUrl.value === url)
+}
 function point(event: PointerEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   return { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height }
@@ -125,7 +135,7 @@ onBeforeUnmount(() => { disposed = true; job?.abort(); cancelAnimationFrame(fram
     <section class="grid-workspace" @dragover.prevent @drop.prevent="drop">
       <div class="editor-pane">
         <div class="pane-heading"><h2>{{ image ? '调整整体裁剪' : '选择一张照片' }}</h2><button v-if="image" class="button" :disabled="busy" @click="resetCrop">重置裁剪</button></div>
-        <div v-if="!image" class="empty-upload"><span class="grid-symbol" aria-hidden="true">▦</span><strong>一张照片，九格风景</strong><p>选择或拖入照片，先调整画面，再生成九张图片。</p><button class="button primary" :disabled="busy" @click="picker?.click()">选择照片</button><small>静态 JPG / PNG / WebP · 最大 10 MiB、1600 万像素</small></div>
+        <div v-if="!image" class="empty-upload"><span class="grid-symbol" aria-hidden="true">▦</span><strong>一张照片，九格风景</strong><p>选择或拖入照片，先调整画面，再生成九张图片。</p><button class="button primary" :disabled="busy" @click="picker?.click()">选择照片</button><small>静态 JPG / PNG / WebP · 最大 10 MiB、6400 万像素</small></div>
         <div v-else class="crop-stage" :class="{ gaps: showGaps, locked: busy }" tabindex="0" role="group" aria-label="图片裁剪区域，拖动或方向键移动，双指或下方滑块缩放" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @lostpointercapture="up" @keydown="keyboard">
           <canvas ref="canvas" width="900" height="900" aria-label="整体裁剪预览"></canvas>
           <div class="grid-overlay" aria-hidden="true"><span v-for="n in 9" :key="n"><i>{{ String(n).padStart(2, '0') }}</i></span></div>
@@ -151,13 +161,13 @@ onBeforeUnmount(() => { disposed = true; job?.abort(); cancelAnimationFrame(fram
     <div v-if="busy" class="status-box" role="status">{{ phase }}<span v-if="phase === '正在生成图片'">{{ progress }} / 9</span><button @click="cancel">取消</button></div>
     <div v-if="error || notice" class="status-box" :class="{ error: !!error }" role="status">{{ error || notice }}</div>
     <section v-if="results.length" class="results-pane">
-      <div class="pane-heading"><h2>生成结果</h2><button v-if="!zipUrl" class="button primary" :disabled="busy" @click="makeZip">打包 ZIP</button><a v-else class="button primary" :href="zipUrl" download="moment-grid.zip">下载 ZIP</a></div>
+      <div class="pane-heading"><h2>生成结果</h2><button v-if="!zipUrl" class="button primary" :disabled="busy" @click="makeZip">打包 ZIP</button><button v-else class="button primary" :disabled="saving" @click="saveZip">下载 ZIP</button></div>
       <p class="muted">点击图片查看大图，手机可长按保存；也可逐张下载。ZIP 下载后需要先解压。</p>
-      <div class="result-grid"><div v-for="(tile, index) in results" :key="tile.name"><button class="tile-button" :aria-label="'查看第 ' + (index + 1) + ' 张图片'" @click="openTile(index)"><img :src="tile.thumb" :alt="'第 ' + (index + 1) + ' 格'" /><span>{{ String(index + 1).padStart(2, '0') }}</span></button><a :href="tile.url" :download="tile.name">下载 {{ String(index + 1).padStart(2, '0') }}</a></div></div>
+      <div class="result-grid"><div v-for="(tile, index) in results" :key="tile.name"><button class="tile-button" :aria-label="'查看第 ' + (index + 1) + ' 张图片'" @click="openTile(index)"><img :src="tile.thumb" :alt="'第 ' + (index + 1) + ' 格'" /><span>{{ String(index + 1).padStart(2, '0') }}</span></button><button class="button" :disabled="saving" @click="saveTile(index)">下载 {{ String(index + 1).padStart(2, '0') }}</button></div></div>
       <p class="muted">浏览器无法保证直接保存到系统相册。微信内下载受限时，可尝试长按保存或使用系统浏览器；发布前请核对图片顺序。</p>
     </section>
     <dialog ref="dialog" class="tile-dialog" aria-label="单张图片预览" @click="($event.target === dialog) && dialog?.close()">
-      <template v-if="current"><div class="pane-heading"><strong>{{ current.name }}</strong><button class="button" @click="dialog?.close()">关闭</button></div><img :src="current.url" :alt="'第 ' + (selected + 1) + ' 张，长按保存图片'" /><div class="dialog-actions"><button class="button" :disabled="selected === 0" @click="selected--">上一张</button><a class="button primary" :href="current.url" :download="current.name">下载图片</a><button class="button" :disabled="selected === 8" @click="selected++">下一张</button></div><p class="muted">手机可长按上方图片保存。</p></template>
+      <template v-if="current"><div class="pane-heading"><strong>{{ current.name }}</strong><button class="button" @click="dialog?.close()">关闭</button></div><img :src="current.url" :alt="'第 ' + (selected + 1) + ' 张，长按保存图片'" /><div class="dialog-actions"><button class="button" :disabled="selected === 0" @click="selected--">上一张</button><button class="button primary" :disabled="saving" @click="saveTile(selected)">下载图片</button><button class="button" :disabled="selected === 8" @click="selected++">下一张</button></div><p class="muted">手机可长按上方图片保存。</p></template>
     </dialog>
   </div>
 </template>

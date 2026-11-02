@@ -34,9 +34,13 @@ describe('image stitching geometry', () => {
     for (const images of [[], [portrait], Array(51).fill(portrait), [portrait, { width: 0, height: 1 }]]) expect(() => layoutImages(images, base)).toThrow()
     for (const change of [{ size: NaN }, { gap: -1 }, { gap: 0.5 }, { columns: 0 }, { padding: 501 }, { size: 8193 }]) expect(() => layoutImages([portrait, landscape], { ...base, ...change })).toThrow()
   })
+  it('can combine two 25 MP photographs at their original dimensions', () => {
+    const result = layoutImages([{ width: 5000, height: 5000 }, { width: 5000, height: 5000 }], { ...base, mode: 'horizontal', size: 5000, gap: 0, padding: 0 })
+    expect(result).toMatchObject({ width: 10000, height: 5000 })
+  })
   it('bounds canvas area and sides before allocation', () => {
     expect(() => layoutImages(Array(50).fill(portrait), { ...base, size: 1000, mode: 'vertical' })).toThrow('合并尺寸过大')
-    expect(() => layoutImages([portrait, portrait], { ...base, size: 5000 })).toThrow('合并尺寸过大')
+    expect(() => layoutImages([portrait, portrait], { ...base, size: 6000 })).toThrow('合并尺寸过大')
     expect(layoutImages(Array(50).fill(portrait), { ...base, size: 100, columns: 10 }).cells).toHaveLength(50)
   })
 })

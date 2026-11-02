@@ -1,5 +1,13 @@
 <script setup lang="ts">
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; status.value = text } })
 import ZipImageTool from './ZipImageTool.vue'
+import FolderBatch from '../../platform/FolderBatch.vue'
+import { compressionProcessor } from './batch-compress'
+const windowDesktop = !!window.desktopBatch
+const batchMode = ref(false), batchRunning = ref(false), embeddedBatch = ref(true)
+const batchExtensions = PHOTO_ACCEPT.split(',').map(value => value.trim().replace(/^\./, '')).filter(value => value !== 'zip')
+function prepareBatch() { return { process: compressionProcessor(level.value, format.value, embeddedBatch.value) } }
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { LEVELS, MIME, outputFilename, TIMEOUT_MS, type CompressionLevel, type ImageFormat, type TargetFormat } from './compression'
 import { detectPhoto, MAX_PHOTO_BYTES, PHOTO_ACCEPT, type PhotoFormat } from './photo-formats'
@@ -30,7 +38,7 @@ function removeResult() {
   if (result.value) { URL.revokeObjectURL(result.value.url); URL.revokeObjectURL(result.value.previewUrl) }
   result.value = undefined
 }
-function invalidate() { revision++; stopWorker(); removeResult(); status.value = ''; error.value = '' }
+function invalidate() { cancelSave(); revision++; stopWorker(); removeResult(); status.value = ''; error.value = '' }
 function clear() {
   invalidate(); archiveFile.value = undefined
   if (source.value) URL.revokeObjectURL(source.value.url)
@@ -52,6 +60,7 @@ function task(payload: Record<string, unknown>): Promise<any> {
   })
 }
 async function load(file: File) {
+  if (batchRunning.value) return
   clear(); const version = revision; busy.value = true; status.value = '正在检查图片…'
   try {
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer())
@@ -90,17 +99,20 @@ function paste(e: ClipboardEvent) {
   const file = Array.from(e.clipboardData?.items ?? []).find(item => item.kind === 'file' && item.type.startsWith('image/'))?.getAsFile()
   if (file) { e.preventDefault(); void load(file) }
 }
-function download() {
-  if (!result.value || !source.value) return
-  const a = document.createElement('a')
-  a.href = result.value.url; a.download = outputFilename(source.value.name, result.value.format, result.value.keptOriginal); a.click()
+async function download() {
+  const data = result.value, input = source.value, token = revision
+  if (!data || !input) return
+  await save(new Blob([data.buffer], { type: MIME[data.format] }), outputFilename(input.name, data.format, data.keptOriginal), () => token === revision && result.value === data)
 }
 onMounted(() => window.addEventListener('paste', paste))
 onBeforeUnmount(() => { clear(); window.removeEventListener('paste', paste) })
 </script>
 <template>
   <div class="tool-page compression-tool">
-    <div class="tool-heading"><div>
+    <FolderBatch title="图片压缩与格式转换" :extensions="batchExtensions" :max-bytes="MAX_PHOTO_BYTES" :prepare="prepareBatch" :disabled="busy || saving || !!archiveFile" hint="沿用下方压缩档位与输出格式，可从列表选择样图预览。ZIP 模式请先清空。" @mode="batchMode = $event" @running="batchRunning = $event" @preview="load" />
+    <div :inert="batchRunning || undefined">
+    <label v-if="windowDesktop && batchMode" class="help"><input v-model="embeddedBatch" type="checkbox" />文件夹批量 Nikon HE/HE★ 兼容：使用相机内嵌 JPEG</label>
+    <div v-if="!windowDesktop" class="tool-heading"><div>
       <div class="eyebrow">图片工具 <span>/</span> LOCAL COMPRESSION</div>
       <h1>图片压缩与格式转换</h1><p>保持图片尺寸，本地处理。按图片格式选择压缩策略。</p>
     </div></div>
@@ -117,7 +129,7 @@ onBeforeUnmount(() => { clear(); window.removeEventListener('paste', paste) })
         </label>
         <label class="indent-label">目标格式
           <select v-model="format">
-            <option value="original">原格式（HEIC / RAW 转 PNG）</option><option value="webp">WebP</option>
+            <option value="original">原格式（HE★ 兼容输出 JPG）</option><option value="webp">WebP</option>
             <option value="png">PNG</option><option value="jpg">JPG</option>
             <option value="avif">AVIF</option><option value="tiff">TIFF（未压缩）</option><option value="bmp">BMP（未压缩）</option>
           </select>
@@ -139,7 +151,7 @@ onBeforeUnmount(() => { clear(); window.removeEventListener('paste', paste) })
     <div v-if="status || error" class="status-box" :class="{ error: !!error }" role="status">{{ error || status }}</div>
     <ZipImageTool v-if="archiveFile" :file="archiveFile" :level="level" :target="format" />
     <section v-if="source" class="time-results">
-      <header><h2>{{ result ? '处理结果' : '原图预览' }}</h2><button v-if="result" class="button" @click="download">{{ result.keptOriginal ? '下载原文件' : '下载结果' }}</button></header>
+      <header><h2>{{ result ? '处理结果' : '原图预览' }}</h2><button v-if="result" class="button" :disabled="saving" @click="download">{{ result.keptOriginal ? '下载原文件' : '下载结果' }}</button></header>
       <p class="file-info">{{ source.name }} · {{ source.width }} × {{ source.height }} · {{ source.format.toUpperCase() }} · {{ size(source.bytes.byteLength) }}</p>
       <ul v-if="!result && source.notes.length"><li v-for="note in source.notes" :key="note">{{ note }}</li></ul>
       <template v-if="result">
@@ -164,7 +176,7 @@ onBeforeUnmount(() => { clear(); window.removeEventListener('paste', paste) })
       <h2>使用说明</h2>
       <ul>
         <li>不缩放图片；有方向信息的照片按浏览器显示方向处理。处理静态图片；带附加图像的 JPG 可导入，重新编码只处理主图。拒绝 GIF、APNG、动态 WebP、HEIF/AVIF 序列及多页 TIFF。</li>
-        <li>可编码的原格式结果不小于原文件时保留原文件；HEIC/RAW 的“原格式”会转换为 PNG；主动转换格式时仍可下载转换结果。</li>
+        <li>可编码的原格式结果不小于原文件时保留原文件；HE/HE★ 内嵌 JPEG 的“原格式”导出 JPG；其他 HEIC/RAW 的“原格式”尝试转换为 PNG；ZIP 批量模式仅在变小时采用，否则保留原件。主动转换格式时仍可下载转换结果。</li>
         <li>PNG 的有损档会尝试减少颜色数量；未达到质量要求时回退无损结果。较强档位会比较多个候选，选择更小文件。</li>
         <li>PNG 原格式保真档直接优化原始数据；JPG/WebP 原格式保真档保留原文件。其他重新编码可能转为 8 位 sRGB，并移除 EXIF 等元数据，广色域、HDR 或 16 位素材请另行保存原片，HEIC/RAW 转换不保留原始数据。</li>
         <li>单图模式每次一张，最多 6400 万像素、单边最多 16384 像素，处理最多 60 秒。修改选项会取消任务并清除旧结果；离开页面释放图片。</li>
@@ -172,6 +184,7 @@ onBeforeUnmount(() => { clear(); window.removeEventListener('paste', paste) })
       </ul>
     </section>
   </div>
+    </div>
 </template>
 <style scoped>
 .compression-tool .encoding-options-row,.comparison-controls{display:flex;flex-wrap:wrap;gap:16px}

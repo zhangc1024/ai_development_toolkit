@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; notice.value = text } })
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { MAX_IMAGE_BYTES } from '../images/core'
 import { validatePhotoDimensions } from '../images/photo-formats'
@@ -163,11 +165,8 @@ async function download() {
     output = makeCanvas(width, height); render(output, portrait, scene, settings)
     const blob = await new Promise<Blob>((resolve, reject) => output!.toBlob(value => value ? resolve(value) : reject(Error('图片编码失败')), ext === 'jpg' ? 'image/jpeg' : 'image/png', .95))
     if (disposed || token !== version) return
-    const url = URL.createObjectURL(blob), link = document.createElement('a')
-    link.href = url; link.download = '双重曝光-' + output.width + 'x' + output.height + '.' + ext
-    document.body.appendChild(link); link.click(); link.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 10000)
-    notice.value = '已导出 ' + output.width + ' × ' + output.height + ' 图片。'
+    await save(blob, '双重曝光-' + output.width + 'x' + output.height + '.' + ext, () => !disposed && token === version)
+
   } catch (e) { if (!disposed) error.value = e instanceof Error ? e.message : '导出失败' }
   finally { if (output) output.width = output.height = 1; if (!disposed) busy.value = false }
 }
@@ -215,7 +214,7 @@ async function download() {
         <label>染色强度<input v-model.number="settings.tintStrength" type="range" min="0" max="1" step=".01" /></label>
         <button @click="resetComposition">重置合成参数</button>
         <div class="export-controls"><label>导出长边<select v-model.number="longEdge"><option :value="1200">1200 px</option><option :value="2400">2400 px</option><option :value="3000">3000 px</option></select></label><label>格式<select v-model="format"><option value="png">PNG</option><option value="jpg">JPG</option></select></label></div>
-        <button class="primary" :disabled="!ready" @click="download">导出图片</button>
+        <button class="primary" :disabled="!ready || saving" @click="download">导出图片</button>
       </fieldset>
     </div>
     <section v-if="editing && names.portrait" class="mask-panel">

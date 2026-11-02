@@ -1,7 +1,7 @@
 import { inspectImage } from '../images/compression'
 import { imageType, MAX_IMAGE_BYTES } from '../images/core'
 
-/** Use photograph dimensions (64 MP), not the small utility-image limit (16 MP).
+/** Use the shared photograph ceiling (64 MP).
  * Inspect the encoded dimensions before asking the browser to allocate decoded pixels.
  */
 export function inspectExposureImage(bytes: Uint8Array) {

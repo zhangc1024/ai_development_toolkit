@@ -1,5 +1,11 @@
 # 后续 Windows 桌面端规划
 
+> 0.1.5 新增压缩转换、水印、照片边框的文件夹批量处理，支持目录输出、失败重试和取消；见 [文件夹批量处理说明](WINDOWS_DESKTOP_FOLDER_BATCH.md)。
+
+> 当前交付约定（2026-11-02）：测试阶段默认提供免安装 ZIP，解压完整文件夹后运行 DevKitImages.exe。使用 npm run desktop:dist；准备发布时再用 npm run desktop:dist:installer 生成 NSIS 安装版。详见 [免安装交付说明](WINDOWS_DESKTOP_PORTABLE.md)。
+
+> 2026-11-02 更新：图片工具 Windows 版采用 Electron，详细方案与分阶段清单见 [WINDOWS_DESKTOP_PLAN.md](WINDOWS_DESKTOP_PLAN.md)。以下保留为早期全工具箱规划；其中 Hash 路由、相对资源路径及未定选型描述已不适用于当前图片桌面方案。已完成 Windows 八工具及原生保存适配，并交付未签名 NSIS 内测包；最新完成项和剩余人工验收见 [WINDOWS_DESKTOP_RELEASE.md](WINDOWS_DESKTOP_RELEASE.md)。
+
 当前只交付网页工程，不含 Electron/Tauri 依赖、原生权限、安装包或自动更新。这里记录可复用设计，避免下一阶段推倒重做。
 
 ## 1. 可直接复用的内容

@@ -25,5 +25,5 @@ export function decodeImageBase64(input:string){
 }
 export function encodeImage(bytes:Uint8Array){const type=imageType(bytes);const base64=toBase64(bytes);return {...type,base64,dataUrl:'data:'+type.mime+';base64,'+base64}}
 export function validateDimensions(width:number,height:number){
- if(!width||!height||width*height>16000000||width>16384||height>16384)throw Error('图片尺寸超过限制：最多 1600 万像素，任一边不超过 16384')
+ if(!Number.isInteger(width)||!Number.isInteger(height)||width<=0||height<=0||width*height>64000000||width>16384||height>16384)throw Error('图片尺寸超过限制：最多 6400 万像素，任一边不超过 16384')
 }

@@ -1,12 +1,29 @@
 <script setup lang="ts">
+import FolderBatch from '../../platform/FolderBatch.vue'
+import { relativeMarks, watermarkProcessor } from './batch'
+const windowDesktop = !!window.desktopBatch
+const batchRunning = ref(false), batchMode = ref(false)
+function prepareBatch() {
+  if (!source.value || !valid.value) throw Error('请先选择样图并设置可见水印')
+  return { process: watermarkProcessor(marks.value.map(mark => ({ ...mark })), { ...source.value }, format.value, compressEnabled.value, level.value) }
+}
+async function previewBatch(file: File) {
+  const previous = source.value, settings = marks.value.map(mark => ({ ...mark }))
+  await load(file)
+  if (previous && source.value && !error.value) { marks.value = relativeMarks(settings, previous, source.value); selected.value = marks.value[0]?.id; draw() }
+}
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; status.value = text } })
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Copy, Download, ImagePlus, Move, Trash2, Stamp, RotateCcw } from '@lucide/vue'
-import { inspectImage, LEVELS, MIME, TIMEOUT_MS, type CompressionLevel, type ImageFormat } from '../images/compression'
-import { MAX_IMAGE_BYTES, validateDimensions } from '../images/core'
+import { LEVELS, MIME, TIMEOUT_MS, type CompressionLevel, type ImageFormat } from '../images/compression'
+import { decodeWatermark, MAX_WATERMARK_BYTES, WATERMARK_ACCEPT, WATERMARK_EXTENSIONS } from './import'
 import { canvasBlob, clamp, dimensions, hitMark, paint, PRESETS, resolveColor, resultFilename, type Watermark } from './core'
 
 const canvas = ref<HTMLCanvasElement>(), input = ref<HTMLInputElement>()
 const source = ref<{ name: string; width: number; height: number; size: number }>()
+const sourceNotes = ref<string[]>([])
+let decodeController: AbortController | undefined
 let bitmap: ImageBitmap | undefined, nextId = 1, revision = 0
 const marks = ref<Watermark[]>([]), selected = ref<number>()
 const current = computed(() => marks.value.find(mark => mark.id === selected.value))
@@ -24,11 +41,12 @@ const change = computed(() => {
   const difference = 100 * (1 - result.value.blob.size / result.value.before.size)
   return difference > 0 ? '减小 ' + difference.toFixed(1) + '%' : difference < 0 ? '增大 ' + (-difference).toFixed(1) + '%' : '体积不变'
 })
-function releaseResult() {
+function releaseResult() { cancelSave();
   if (result.value) { URL.revokeObjectURL(result.value.url); URL.revokeObjectURL(result.value.beforeUrl) }
   result.value = undefined
 }
 function stop() {
+  decodeController?.abort(); decodeController = undefined
   worker?.terminate(); worker = undefined; clearTimeout(timer); timer = undefined
   const reject = rejectWorker; rejectWorker = undefined; reject?.(Error('操作已取消'))
 }
@@ -71,16 +89,16 @@ function setColor(value: string) {
   if (current.value) current.value.color = parsed
 }
 async function load(file: File) {
+  if (batchRunning.value) return
   invalidate(); const version = revision; busy.value = true; status.value = '正在读取图片…'
   drag = undefined
   try {
-    if (!file.size || file.size > MAX_IMAGE_BYTES) throw Error('图片必须非空且不超过 10 MiB')
-    const bytes = await file.arrayBuffer()
-    if (version !== revision) return
-    inspectImage(new Uint8Array(bytes))
-    const decoded = await createImageBitmap(new Blob([bytes]))
+    const task = new AbortController(); decodeController = task
+    const data = await decodeWatermark(file, task.signal)
+    if (decodeController === task) decodeController = undefined
+    const decoded = data.bitmap
     if (version !== revision) { decoded.close(); return }
-    try { validateDimensions(decoded.width, decoded.height) } catch (e) { decoded.close(); throw e }
+    sourceNotes.value = data.notes
     bitmap?.close(); bitmap = decoded
     source.value = { name: file.name || '粘贴图片.png', width: decoded.width, height: decoded.height, size: file.size }
     marks.value = []; selected.value = undefined; busy.value = false
@@ -173,14 +191,15 @@ async function generate() {
       if (candidate.size < before.size || (format.value === 'webp' && level.value === 'preserve')) { blob = candidate; notes = encoded.notes }
       else notes = ['本次压缩未减小体积，已保留未压缩的带水印图片。']
     }
-    result.value = { blob, before, url: URL.createObjectURL(blob), beforeUrl: URL.createObjectURL(before), notes, compressed: compressEnabled.value }
+    result.value = { blob, before, url: URL.createObjectURL(blob), beforeUrl: URL.createObjectURL(before), notes: [...sourceNotes.value, ...notes], compressed: compressEnabled.value }
     compare.value = 50; status.value = '生成完成，可复制图片或下载。'
   } catch (e) { if (version === revision) { error.value = e instanceof Error ? e.message : '生成失败'; status.value = '' } }
   finally { output.width = 0; output.height = 0; if (version === revision) busy.value = false }
 }
-function download() {
-  if (!result.value || !source.value) return
-  const anchor = document.createElement('a'); anchor.href = result.value.url; anchor.download = resultFilename(source.value.name, format.value); anchor.click()
+async function download() {
+  const data = result.value, input = source.value, token = revision
+  if (!data || !input) return
+  await save(data.blob, resultFilename(input.name, format.value), () => token === revision && result.value === data)
 }
 async function copyImage() {
   if (!result.value) return
@@ -198,7 +217,7 @@ async function copyImage() {
   } catch { if (version === revision) error.value = '复制图片失败，请允许剪贴板权限或使用下载图片。' }
 }
 function clear() {
-  invalidate(); bitmap?.close(); bitmap = undefined; source.value = undefined; marks.value = []; selected.value = undefined; drag = undefined; colorError.value = ''
+  invalidate(); bitmap?.close(); bitmap = undefined; source.value = undefined; sourceNotes.value = []; marks.value = []; selected.value = undefined; drag = undefined; colorError.value = ''
 }
 onMounted(() => window.addEventListener('paste', paste))
 onBeforeUnmount(() => { window.removeEventListener('paste', paste); clear() })
@@ -206,20 +225,23 @@ onBeforeUnmount(() => { window.removeEventListener('paste', paste); clear() })
 
 <template>
   <div class="tool-page watermark-tool">
-    <div class="tool-heading"><div><div class="eyebrow">图片工具 <span>/</span> LOCAL WATERMARK</div>
+    <FolderBatch title="图片加水印" :extensions="WATERMARK_EXTENSIONS" :max-bytes="MAX_WATERMARK_BYTES" :prepare="prepareBatch" :disabled="busy || saving" hint="先在下方样图设置水印；位置按宽高比例、字号按短边比例适配。切换样图保留水印设置。" @mode="batchMode = $event" @running="batchRunning = $event" @preview="previewBatch" />
+    <div :inert="batchRunning || undefined">
+    <div v-if="!windowDesktop" class="tool-heading"><div><div class="eyebrow">图片工具 <span>/</span> LOCAL WATERMARK</div>
       <h1>图片加水印</h1><p>为认证材料标注用途，处理后可直接复制或压缩。图片仅在浏览器本地处理。</p>
     </div></div>
-    <input ref="input" class="wm-file" type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择水印图片" @change="selectFile" />
+    <input ref="input" class="wm-file" type="file" :accept="WATERMARK_ACCEPT" aria-label="选择水印图片" @change="selectFile" />
     <div v-if="!source" class="wm-upload" @dragover.prevent @drop.prevent="drop">
-      <ImagePlus :size="38" /><h2>添加需要标注的图片</h2><p>拖放或粘贴图片，也可以从设备选择</p>
+      <ImagePlus :size="38" /><h2>添加需要标注的图片</h2><p>拖放或粘贴图片，也可以从设备选择；HEIC / NEF 可直接导入，加水印后默认导出 JPG</p>
       <button class="button primary" :disabled="busy" @click="input?.click()">选择图片</button>
-      <small>静态 PNG / JPG / WebP · ≤ 10 MiB · ≤ 1600 万像素</small>
+      <small>静态 PNG / JPG / WebP / HEIC / HEIF / NEF · ≤ 100 MiB · ≤ 6400 万像素</small>
     </div>
     <div v-else class="wm-layout">
       <section class="wm-preview" @dragover.prevent @drop.prevent="drop">
         <header><div><h2>{{ source.name }}</h2><small>{{ source.width }} × {{ source.height }} · {{ size(source.size) }}</small></div>
           <button class="text-button" :disabled="busy" @click="input?.click()"><ImagePlus :size="16" />更换图片</button>
         </header>
+        <p v-for="note in sourceNotes" :key="note" class="wm-help">{{ note }}</p>
         <div class="wm-canvas-wrap"><canvas ref="canvas" tabindex="0" aria-label="水印预览，点击水印后拖动，方向键微调，Delete 删除"
           @pointerdown="down" @pointermove="move" @pointerup="end" @pointercancel="end" @lostpointercapture="end" @keydown="key" /></div>
         <p class="wm-help"><Move :size="14" />拖动水印调整位置 · 方向键微调 · 超出图片的部分不导出</p>
@@ -252,14 +274,15 @@ onBeforeUnmount(() => { window.removeEventListener('paste', paste); clear() })
         </fieldset>
         <div class="wm-actions"><button class="button primary" :disabled="busy || !valid" @click="generate"><Stamp :size="16" />{{ busy ? '处理中…' : '生成图片' }}</button>
           <button v-if="busy" class="button" @click="cancel">取消</button>
-          <button class="button" :disabled="!result || busy" @click="copyImage"><Copy :size="15" />复制图片</button>
-          <button class="button" :disabled="!result || busy" @click="download"><Download :size="15" />下载图片</button>
+          <button class="button" :disabled="!result || busy || saving" @click="copyImage"><Copy :size="15" />复制图片</button>
+          <button class="button" :disabled="!result || busy || saving" @click="download"><Download :size="15" />下载图片</button>
         </div>
       </div>
       <p class="wm-help">先加水印，再压缩 · 保持原图尺寸 · JPG 透明区域填白 · 复制图片使用 PNG，上传有体积限制时请下载文件</p>
       <p v-if="compressEnabled" class="wm-help">{{ level === 'preserve' ? '对已合成的图片优先保留清晰度；不保证文件体积减小。' : LEVELS.find(item => item.id === level)?.hint }}</p>
       <p v-if="!valid && !colorError" class="wm-help">请至少保留一个非空且透明度大于 0% 的水印。</p>
     </section>
+    <button v-if="busy && !source" class="button" @click="cancel">取消读取</button>
     <div v-if="status || error" class="status-box" :class="{ error: !!error }" role="status">{{ error || status }}</div>
     <section v-if="result" class="wm-result">
       <header><h2>处理结果</h2><strong>{{ size(result.blob.size) }} · {{ format.toUpperCase() }}<template v-if="result.compressed"> · {{ change }}</template></strong></header>
@@ -274,6 +297,7 @@ onBeforeUnmount(() => { window.removeEventListener('paste', paste); clear() })
     </section>
     <button v-if="source" class="text-button wm-clear" :disabled="busy" @click="clear"><RotateCcw :size="14" />清空图片与水印</button>
   </div>
+    </div>
 </template>
 
 <style scoped>

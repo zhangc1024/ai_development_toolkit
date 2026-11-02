@@ -1,5 +1,6 @@
 /** 桌面端可替换这里的系统能力，不需要改 JSON 处理逻辑。 */
 export async function copyText(text: string) {
+  if (window.desktopClipboard) return window.desktopClipboard.writeText(text)
   if (!navigator.clipboard?.writeText) throw new Error('当前环境不能直接复制，请选中结果后按 Ctrl+C')
   await navigator.clipboard.writeText(text)
 }

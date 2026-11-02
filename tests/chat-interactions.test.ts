@@ -18,7 +18,8 @@ async function harness(overrides: Record<string, unknown> = {}) {
   const queue = createWriteQueue()
   let mount!: () => Promise<void>, unmount!: () => void
   const env = {
-    ...vue, onMounted: (fn: typeof mount) => { mount = fn }, onBeforeUnmount: (fn: typeof unmount) => { unmount = fn },
+    // Node 24 CJS namespaces add a non-identifier 'module.exports' marker.
+    ...Object.fromEntries(Object.entries(vue).filter(([name]) => /^[$A-Z_a-z][$\w]*$/.test(name))), onMounted: (fn: typeof mount) => { mount = fn }, onBeforeUnmount: (fn: typeof unmount) => { unmount = fn },
     loadChatSettings: () => ({ thinking: false }), saveChatSettings: () => true,
     aiSettings: vue.reactive({ model: 'local', baseUrl: 'http://localhost:11434' }),
     buildContext, conversationSummary, MAX_INPUT_CHARS, chatWrites: queue, confirm: vi.fn(() => true),

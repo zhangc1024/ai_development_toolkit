@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; notice.value = text } })
 import { computed,onBeforeUnmount,onMounted,ref,watch } from 'vue'
-import { copyText,downloadText } from '../../platform/browser'
+import { copyText } from '../../platform/browser'
 import { decodeImageBase64,encodeImage,imageType,MAX_BASE64_CHARS,MAX_IMAGE_BYTES,validateDimensions } from './core'
 const props=defineProps<{kind:'image-base64'|'qr-reader'}>()
 const direction=ref<'encode'|'decode'>('encode'),text=ref(''),format=ref<'dataUrl'|'base64'>('dataUrl')
@@ -14,14 +16,14 @@ const urls=new Set<string>()
 function revoke(url:string){if(url){URL.revokeObjectURL(url);urls.delete(url)}}
 function stop(){worker?.terminate();worker=null;clearTimeout(timer);busy.value=false}
 function reset(){
- revision++;stop();revoke(preview.value);preview.value='';bytes=null;encoded.value=null;qr.value=null
+ cancelSave();revision++;stop();revoke(preview.value);preview.value='';bytes=null;encoded.value=null;qr.value=null
  name.value='';mime.value='';ext.value='';size.value=0;width.value=0;height.value=0;error.value='';notice.value=''
  if(fileInput.value)fileInput.value.value=''
 }
 function clear(){reset();text.value=''}
 watch(direction,clear,{flush:'sync'})
 watch(text,()=>{if(direction.value==='decode')reset()},{flush:'sync'})
-watch(format,()=>{notice.value=''})
+watch(format,()=>{cancelSave();notice.value=''})
 onMounted(()=>window.addEventListener('paste',paste))
 onBeforeUnmount(()=>{revision++;stop();for(const url of urls)URL.revokeObjectURL(url);urls.clear();window.removeEventListener('paste',paste)})
 async function accept(data:Uint8Array,filename:string,version:number){
@@ -71,7 +73,15 @@ async function decode(){
  catch(e){if(version===revision){stop();error.value=e instanceof Error?e.message:'Base64 转图片失败'}}
 }
 async function copy(value:string){const version=revision;try{await copyText(value);if(version===revision)notice.value='已复制'}catch{if(version===revision)notice.value='复制失败，请手动选择文本复制'}}
-function downloadImage(){if(!preview.value)return;const a=document.createElement('a');a.href=preview.value;a.download='image.'+ext.value;a.click()}
+async function downloadImage() {
+ if (!preview.value) return
+ const version = revision, url = preview.value
+ await saveUrl(url, 'image.' + ext.value, () => version === revision && preview.value === url)
+}
+async function downloadText(value: string, filename: string, mime = 'text/plain;charset=utf-8') {
+ const version = revision
+ await save(new Blob([value], { type: mime }), filename, () => version === revision)
+}
 async function sample(){
  reset();const version=revision;busy.value=true
  try{const QRCode=await import('qrcode');const data=await QRCode.toDataURL('DevKit 本地二维码识别测试 https://example.com',{margin:4,scale:8});if(version!==revision)return
@@ -89,11 +99,11 @@ async function sample(){
   <div class="primary-actions"><button v-if="kind==='image-base64'&&direction==='decode'" class="button primary" :disabled="busy" @click="decode">还原图片</button><button class="button" :disabled="busy" @click="sample">加载示例</button><button class="button" @click="clear">清空</button><button v-if="busy" class="button" @click="reset">取消</button><span v-if="busy">处理中…</span></div>
  </section>
  <div v-if="error||notice" role="status" class="status-box" :class="{error:!!error}">{{ error||notice }}</div>
- <section v-if="preview" class="time-results image-preview"><header><h2>图片预览</h2><button v-if="kind==='image-base64'" class="button" @click="downloadImage">下载图片</button></header><img :src="preview" alt="本地图片预览" /><p class="image-meta">{{ name }} · {{ mime }} · {{ width }} × {{ height }} · {{ size.toLocaleString() }} 字节</p></section>
- <section v-if="encoded" class="time-results"><header><h2>编码结果</h2><div class="primary-actions"><label class="indent-label">输出格式<select v-model="format" aria-label="输出格式"><option value="dataUrl">Data URL</option><option value="base64">纯 Base64</option></select></label><button class="button" @click="copy(resultText)">复制编码</button><button class="button" @click="downloadText(resultText,'image-base64.txt','text/plain;charset=utf-8')">下载编码</button></div></header><p>Base64 {{ encoded.base64.length.toLocaleString() }} 个字符（不含 Data URL 前缀）</p><textarea :value="resultText" readonly aria-label="图片 Base64 结果" rows="8" spellcheck="false"></textarea></section>
- <section v-if="qr" class="time-results"><header><h2>识别结果</h2><div class="primary-actions"><button class="button" @click="copy(qr.text)">复制识别内容</button><button class="button" @click="downloadText(qr.text,'qrcode-content.txt','text/plain;charset=utf-8')">下载文本</button></div></header><textarea :value="qr.text" readonly aria-label="二维码识别内容" rows="6" spellcheck="false"></textarea><p>QR 版本 {{ qr.version }} · 解码字节数 {{ qr.bytes.length }}。内容按普通文本显示。</p><details><summary>原始字节（Hex）</summary><pre>{{ qr.bytes.map(b=>b.toString(16).padStart(2,'0')).join(' ') }}</pre></details></section>
+ <section v-if="preview" class="time-results image-preview"><header><h2>图片预览</h2><button v-if="kind==='image-base64'" class="button" :disabled="saving" @click="downloadImage">下载图片</button></header><img :src="preview" alt="本地图片预览" /><p class="image-meta">{{ name }} · {{ mime }} · {{ width }} × {{ height }} · {{ size.toLocaleString() }} 字节</p></section>
+ <section v-if="encoded" class="time-results"><header><h2>编码结果</h2><div class="primary-actions"><label class="indent-label">输出格式<select v-model="format" aria-label="输出格式"><option value="dataUrl">Data URL</option><option value="base64">纯 Base64</option></select></label><button class="button" @click="copy(resultText)">复制编码</button><button class="button" :disabled="saving" @click="downloadText(resultText,'image-base64.txt','text/plain;charset=utf-8')">下载编码</button></div></header><p>Base64 {{ encoded.base64.length.toLocaleString() }} 个字符（不含 Data URL 前缀）</p><textarea :value="resultText" readonly aria-label="图片 Base64 结果" rows="8" spellcheck="false"></textarea></section>
+ <section v-if="qr" class="time-results"><header><h2>识别结果</h2><div class="primary-actions"><button class="button" @click="copy(qr.text)">复制识别内容</button><button class="button" :disabled="saving" @click="downloadText(qr.text,'qrcode-content.txt','text/plain;charset=utf-8')">下载文本</button></div></header><textarea :value="qr.text" readonly aria-label="二维码识别内容" rows="6" spellcheck="false"></textarea><p>QR 版本 {{ qr.version }} · 解码字节数 {{ qr.bytes.length }}。内容按普通文本显示。</p><details><summary>原始字节（Hex）</summary><pre>{{ qr.bytes.map(b=>b.toString(16).padStart(2,'0')).join(' ') }}</pre></details></section>
  <section class="encoding-rules"><h2>使用说明</h2><ul>
- <li>仅本地文件和粘贴图片，不请求远程图片地址。最大 10 MiB、1600 万像素、单边 16384 像素。文件头和浏览器解码均需通过。</li>
+ <li>仅本地文件和粘贴图片，不请求远程图片地址。最大 10 MiB、6400 万像素、单边 16384 像素。文件头和浏览器解码均需通过。</li>
  <li v-if="kind==='image-base64'">图片转 Base64 保留原始字节，包括元数据与动画；支持标准 Base64（可省略填充），忽略空格、Tab 和换行。拒绝 SVG、Base64URL、错误 MIME 声明和无法解码的内容。</li>
  <li v-if="kind==='qr-reader'">每张图片识别一个 QR 码，读取静态首帧。识别时透明区域按白底处理，最长边缩至 2048；密集二维码建议先裁剪。支持普通及反色二维码，不保证模糊、遮挡或多码图片成功。</li>
  <li v-if="kind==='qr-reader'">识别在 Worker 内运行，超过 5 秒停止。不支持摄像头、条形码或批量识别。识别出的 URL、HTML、2FA 密钥均只作文本展示，不自动访问、执行或导入。</li>

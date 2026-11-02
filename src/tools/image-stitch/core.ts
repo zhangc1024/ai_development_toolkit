@@ -26,7 +26,7 @@ export function layoutImages(images: Size[], options: Options): Layout {
   })
   const width = Math.max(...cells.map(cell => cell.x + cell.width)) + padding
   const height = Math.max(...cells.map(cell => cell.y + cell.height)) + padding
-  if (width > 16384 || height > 16384 || width * height > 32000000) throw Error('合并尺寸过大（最多 3200 万像素、单边 16384 px），请减小图片尺寸、间距或图片数量')
+  if (width > 16384 || height > 16384 || width * height > 64000000) throw Error('合并尺寸过大（最多 6400 万像素、单边 16384 px），请减小图片尺寸、间距或图片数量')
   return { width, height, cells, columns: cols, rows }
 }
 /** Centered source crop and destination rectangle, shared by preview and export. */

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useFiles } from "../../platform/use-files"
+const { save, saveUrl, saving, cancelSave } = useFiles((text, failed) => { if (failed) error.value = text; else { error.value = ''; notice.value = text } })
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { Plus, X, Grip, Rows3, Columns3, Grid2x2, Download, Maximize, Images, ArrowLeft, ArrowRight } from '@lucide/vue'
 import { prepareImage, canvasBlob, type Prepared } from '../moments-grid/images'
@@ -111,15 +113,12 @@ async function download() {
     const blob = await exportImage([...items.value], layout, fit.value, fill.value, format.value, task.signal, count => { phase.value = '正在合并 ' + count + ' / ' + items.value.length })
     task.signal.throwIfAborted()
     const ext = blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : 'png'
-    const url = URL.createObjectURL(blob); downloadUrls.add(url)
-    const link = document.createElement('a'); link.href = url; link.download = '拼接图片-' + layout.width + 'x' + layout.height + '.' + ext
-    document.body.appendChild(link); link.click(); link.remove()
-    setTimeout(() => { URL.revokeObjectURL(url); downloadUrls.delete(url) }, 60000)
-    notice.value = blob.type === format.value ? '图片已生成，已开始下载。' : '浏览器不支持所选格式，已改为 PNG 下载。'
+    await save(blob, '拼接图片-' + layout.width + 'x' + layout.height + '.' + ext, () => !disposed && !task.signal.aborted)
+
   } catch (e) { if (!disposed && !task.signal.aborted) error.value = message(e) }
   finally { if (!disposed) { busy.value = false; phase.value = '' }; if (job === task) job = undefined }
 }
-function cancel() { job?.abort(); notice.value = '已取消，已添加的图片会保留。' }
+function cancel() { cancelSave(); job?.abort(); notice.value = '已取消，已添加的图片会保留。' }
 onMounted(() => { window.addEventListener('paste', paste); render() })
 onBeforeUnmount(() => {
   disposed = true; job?.abort(); cancelAnimationFrame(frame); window.removeEventListener('paste', paste)
@@ -164,13 +163,13 @@ onBeforeUnmount(() => {
           <canvas v-show="geometry.layout && !previewError" ref="canvas" aria-label="合并图片预览" />
           <div v-if="!geometry.layout || previewError" class="preview-empty"><Images :size="46" /><strong>{{ geometry.error || previewError || (items.length === 1 ? '再添加一张图片即可预览' : '拼接效果将在这里呈现') }}</strong><p v-if="!geometry.error && !previewError">选择图片与拼接方式，实时查看合并效果</p></div>
         </div>
-        <footer><div class="output-info"><template v-if="geometry.layout"><strong>{{ geometry.layout.columns }} 列 × {{ geometry.layout.rows }} 行 · {{ items.length }} 张图片</strong><span>{{ geometry.layout.width }} × {{ geometry.layout.height }} px</span></template><span v-else>至少添加 2 张图片</span></div><div class="export-actions"><label>输出格式<select v-model="format" :disabled="busy"><option value="image/png">PNG</option><option value="image/jpeg">JPG</option><option value="image/webp">WebP</option></select></label><button class="button primary" :disabled="busy || !geometry.layout || !!previewError" @click="download"><Download :size="17" />下载图片</button></div></footer>
+        <footer><div class="output-info"><template v-if="geometry.layout"><strong>{{ geometry.layout.columns }} 列 × {{ geometry.layout.rows }} 行 · {{ items.length }} 张图片</strong><span>{{ geometry.layout.width }} × {{ geometry.layout.height }} px</span></template><span v-else>至少添加 2 张图片</span></div><div class="export-actions"><label>输出格式<select v-model="format" :disabled="busy"><option value="image/png">PNG</option><option value="image/jpeg">JPG</option><option value="image/webp">WebP</option></select></label><button class="button primary" :disabled="saving || busy || !geometry.layout || !!previewError" @click="download"><Download :size="17" />下载图片</button></div></footer>
       </section>
     </div>
     <div v-if="busy" class="status-box" role="status">{{ phase }}<button @click="cancel">取消</button></div>
     <div v-if="error" class="status-box error stitch-error" role="alert">{{ error }}</div>
     <div v-if="notice" class="status-box success" role="status">{{ notice }}</div>
-    <p class="limits-note">单张 ≤ 10 MiB / 1600 万像素，总文件 ≤ 100 MiB；导出 ≤ 3200 万像素、单边 ≤ 16384 px。仅支持静态图片，不上传、不保存历史。</p>
+    <p class="limits-note">单张 ≤ 10 MiB / 6400 万像素，总文件 ≤ 100 MiB；导出 ≤ 6400 万像素、单边 ≤ 16384 px。仅支持静态图片，不上传、不保存历史。</p>
   </div>
 </template>
 
